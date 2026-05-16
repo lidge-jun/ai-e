@@ -1,0 +1,31 @@
+#!/usr/bin/env sh
+set -eu
+
+SELF=$0
+while [ -h "$SELF" ]; do
+  DIR=$(CDPATH= cd -P -- "$(dirname -- "$SELF")" && pwd)
+  TARGET=$(readlink "$SELF")
+  case "$TARGET" in
+    /*) SELF=$TARGET ;;
+    *) SELF=$DIR/$TARGET ;;
+  esac
+done
+
+ROOT=$(CDPATH= cd -P -- "$(dirname -- "$SELF")/.." && pwd)
+BIN="$ROOT/target/release/ai-e"
+
+if [ "${AI_E_BIN:-}" != "" ] && [ -x "$AI_E_BIN" ]; then
+  exec "$AI_E_BIN" "$@"
+fi
+
+if [ -x "$BIN" ]; then
+  exec "$BIN" "$@"
+fi
+
+if ! command -v cargo >/dev/null 2>&1; then
+  echo "ai-e native binary is not built and cargo is not available." >&2
+  echo "Run npm rebuild ai-e, cargo build --release --locked, or set AI_E_BIN to a built binary." >&2
+  exit 127
+fi
+
+exec cargo run --quiet --manifest-path "$ROOT/Cargo.toml" --bin ai-e -- "$@"

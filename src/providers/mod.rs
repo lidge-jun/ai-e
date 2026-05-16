@@ -1,0 +1,123 @@
+use std::ffi::OsString;
+
+pub mod claude_code;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProviderKind {
+    ClaudeCode,
+    Codex,
+    Gemini,
+    Grok,
+    Copilot,
+}
+
+impl ProviderKind {
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "claude" | "claude-code" => Some(Self::ClaudeCode),
+            "codex" => Some(Self::Codex),
+            "gemini" => Some(Self::Gemini),
+            "grok" => Some(Self::Grok),
+            "copilot" | "github-copilot" => Some(Self::Copilot),
+            _ => None,
+        }
+    }
+
+    pub fn id(self) -> &'static str {
+        match self {
+            Self::ClaudeCode => "claude",
+            Self::Codex => "codex",
+            Self::Gemini => "gemini",
+            Self::Grok => "grok",
+            Self::Copilot => "copilot",
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::ClaudeCode => "Claude Code",
+            Self::Codex => "Codex CLI",
+            Self::Gemini => "Gemini CLI",
+            Self::Grok => "Grok CLI",
+            Self::Copilot => "GitHub Copilot CLI",
+        }
+    }
+
+    pub fn default_binary(self) -> &'static str {
+        match self {
+            Self::ClaudeCode => claude_code::DEFAULT_BINARY,
+            Self::Codex => "codex",
+            Self::Gemini => "gemini",
+            Self::Grok => "grok",
+            Self::Copilot => "copilot",
+        }
+    }
+
+    pub fn binary_env_vars(self) -> &'static [&'static str] {
+        match self {
+            Self::ClaudeCode => claude_code::BINARY_ENV_VARS,
+            Self::Codex => &["AI_E_CODEX_BIN", "CODEX_BIN"],
+            Self::Gemini => &["AI_E_GEMINI_BIN", "GEMINI_BIN"],
+            Self::Grok => &["AI_E_GROK_BIN", "GROK_BIN"],
+            Self::Copilot => &["AI_E_COPILOT_BIN", "COPILOT_BIN"],
+        }
+    }
+
+    pub fn resolve_binary(self) -> String {
+        self.binary_env_vars()
+            .iter()
+            .find_map(|name| {
+                std::env::var(name)
+                    .ok()
+                    .filter(|value| !value.trim().is_empty())
+            })
+            .unwrap_or_else(|| self.default_binary().to_string())
+    }
+
+    pub fn is_pty_provider(self) -> bool {
+        matches!(self, Self::ClaudeCode)
+    }
+}
+
+pub fn split_provider_args(raw_args: Vec<OsString>) -> (ProviderKind, Vec<OsString>) {
+    let Some(first) = raw_args.first().and_then(|arg| arg.to_str()) else {
+        return (ProviderKind::ClaudeCode, raw_args);
+    };
+
+    let Some(provider) = ProviderKind::parse(first) else {
+        return (ProviderKind::ClaudeCode, raw_args);
+    };
+
+    let rest = raw_args.into_iter().skip(1).collect();
+    (provider, rest)
+}
+
+pub fn unsupported_provider_message(provider: ProviderKind) -> String {
+    format!(
+        "{} provider is not available in this runtime path.",
+        provider.label()
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn os_args(values: &[&str]) -> Vec<OsString> {
+        values.iter().map(OsString::from).collect()
+    }
+
+    #[test]
+    fn splits_explicit_provider() {
+        let (provider, args) = split_provider_args(os_args(&["copilot", "--model", "gpt-5-mini"]));
+        assert_eq!(provider, ProviderKind::Copilot);
+        assert_eq!(args, os_args(&["--model", "gpt-5-mini"]));
+    }
+
+    #[test]
+    fn defaults_to_claude_when_provider_is_omitted() {
+        let (provider, args) = split_provider_args(os_args(&["--model", "opus", "hello"]));
+        assert_eq!(provider, ProviderKind::ClaudeCode);
+        assert_eq!(args, os_args(&["--model", "opus", "hello"]));
+    }
+}
