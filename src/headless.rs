@@ -148,7 +148,8 @@ pub fn parse_headless_args(
             | "--deny-url"
             | "--available-tools"
             | "--excluded-tools"
-            | "--secret-env-vars" => {
+            | "--secret-env-vars"
+            | "--stream" => {
                 let value = take_value(&args, &mut index, &flag, inline_value)?;
                 extra_args.push(flag);
                 extra_args.push(value);
@@ -243,6 +244,9 @@ fn build_codex_args(options: &HeadlessOptions, prompt: &str) -> Vec<String> {
     ) {
         args.push("--dangerously-bypass-approvals-and-sandbox".to_string());
     }
+    if !contains_any(&options.extra_args, &["--skip-git-repo-check"]) {
+        args.push("--skip-git-repo-check".to_string());
+    }
     args.extend(options.extra_args.clone());
     args.push(prompt.to_string());
     args
@@ -254,12 +258,16 @@ fn build_gemini_args(options: &HeadlessOptions, prompt: &str) -> Vec<String> {
         args.extend(["--model".to_string(), model.clone()]);
     }
     args.extend(["--prompt".to_string(), prompt.to_string()]);
-    args.extend([
-        "--output-format".to_string(),
-        options.output_format.clone(),
-        "--skip-trust".to_string(),
-        "--yolo".to_string(),
-    ]);
+    args.extend(["--output-format".to_string(), options.output_format.clone()]);
+    if !contains_any(&options.extra_args, &["--skip-trust"]) {
+        args.push("--skip-trust".to_string());
+    }
+    if !contains_any(&options.extra_args, &["--approval-mode"]) {
+        args.extend(["--approval-mode".to_string(), "yolo".to_string()]);
+    }
+    for dir in gemini_default_include_directories(&options.extra_args) {
+        args.extend(["--include-directories".to_string(), dir]);
+    }
     args.extend(options.extra_args.clone());
     args
 }
@@ -279,10 +287,19 @@ fn build_grok_args(options: &HeadlessOptions, prompt: &str) -> Vec<String> {
         prompt.to_string(),
         "--output-format".to_string(),
         output_format.to_string(),
-        "--always-approve".to_string(),
-        "--permission-mode".to_string(),
-        "bypassPermissions".to_string(),
     ]);
+    if !contains_any(&options.extra_args, &["--no-alt-screen"]) {
+        args.push("--no-alt-screen".to_string());
+    }
+    if !contains_any(&options.extra_args, &["--always-approve"]) {
+        args.push("--always-approve".to_string());
+    }
+    if !contains_any(&options.extra_args, &["--permission-mode"]) {
+        args.extend([
+            "--permission-mode".to_string(),
+            "bypassPermissions".to_string(),
+        ]);
+    }
     args.extend(options.extra_args.clone());
     args
 }
@@ -302,10 +319,13 @@ fn build_copilot_args(options: &HeadlessOptions, prompt: &str) -> Vec<String> {
         prompt.to_string(),
         "--output-format".to_string(),
         output_format.to_string(),
-        "--allow-all".to_string(),
-        "--stream".to_string(),
-        "off".to_string(),
     ]);
+    if !contains_any(&options.extra_args, &["--allow-all"]) {
+        args.push("--allow-all".to_string());
+    }
+    if !contains_any(&options.extra_args, &["--stream"]) {
+        args.extend(["--stream".to_string(), "off".to_string()]);
+    }
     args.extend(options.extra_args.clone());
     args
 }
@@ -413,6 +433,32 @@ fn contains_any(args: &[String], needles: &[&str]) -> bool {
     })
 }
 
+fn gemini_default_include_directories(extra_args: &[String]) -> Vec<String> {
+    let mut dirs = Vec::new();
+    for dir in [
+        std::env::var("HOME").ok(),
+        std::env::var("USERPROFILE").ok(),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        if dir.trim().is_empty()
+            || dirs.contains(&dir)
+            || extra_arg_has_value(extra_args, "--include-directories", &dir)
+        {
+            continue;
+        }
+        dirs.push(dir);
+    }
+    dirs
+}
+
+fn extra_arg_has_value(args: &[String], flag: &str, value: &str) -> bool {
+    args.windows(2)
+        .any(|pair| pair[0] == flag && pair[1] == value)
+        || args.iter().any(|arg| arg == &format!("{flag}={value}"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -435,6 +481,7 @@ mod tests {
         assert!(args.contains(&"gpt-5-mini".to_string()));
         assert!(args.contains(&"--json".to_string()));
         assert!(args.contains(&"--dangerously-bypass-approvals-and-sandbox".to_string()));
+        assert!(args.contains(&"--skip-git-repo-check".to_string()));
     }
 
     #[test]
@@ -452,19 +499,15 @@ mod tests {
         )
         .unwrap();
         let args = build_provider_args(ProviderKind::Gemini, &options, &options.prompt);
-        assert_eq!(
-            args,
-            vec![
-                "--model",
-                "gemini-2.5-pro",
-                "--prompt",
-                "hello",
-                "--output-format",
-                "stream-json",
-                "--skip-trust",
-                "--yolo",
-            ]
-        );
+        assert_eq!(args[0], "--model");
+        assert!(args.contains(&"gemini-2.5-pro".to_string()));
+        assert!(args.contains(&"--prompt".to_string()));
+        assert!(args.contains(&"hello".to_string()));
+        assert!(args.contains(&"--output-format".to_string()));
+        assert!(args.contains(&"stream-json".to_string()));
+        assert!(args.contains(&"--skip-trust".to_string()));
+        assert!(args.contains(&"--approval-mode".to_string()));
+        assert!(args.contains(&"yolo".to_string()));
     }
 
     #[test]
@@ -477,7 +520,10 @@ mod tests {
         .unwrap();
         let args = build_provider_args(ProviderKind::Grok, &options, &options.prompt);
         assert!(args.contains(&"streaming-json".to_string()));
+        assert!(args.contains(&"--no-alt-screen".to_string()));
         assert!(args.contains(&"--always-approve".to_string()));
+        assert!(args.contains(&"--permission-mode".to_string()));
+        assert!(args.contains(&"bypassPermissions".to_string()));
     }
 
     #[test]
@@ -496,7 +542,47 @@ mod tests {
         .unwrap();
         let args = build_provider_args(ProviderKind::Copilot, &options, &options.prompt);
         assert!(args.contains(&"--allow-all".to_string()));
+        assert!(args.contains(&"--stream".to_string()));
+        assert!(args.contains(&"off".to_string()));
         assert!(args.contains(&"json".to_string()));
         assert!(args.contains(&"gpt-5-mini".to_string()));
+    }
+
+    #[test]
+    fn respects_explicit_headless_hardening_overrides() {
+        let options = parse_headless_args(
+            ProviderKind::Grok,
+            os_args(&[
+                "--output-format",
+                "stream-json",
+                "--permission-mode",
+                "ask",
+                "--always-approve",
+                "hello",
+            ]),
+            None,
+        )
+        .unwrap();
+        let args = build_provider_args(ProviderKind::Grok, &options, &options.prompt);
+        assert_eq!(
+            args.iter()
+                .filter(|arg| arg.as_str() == "--permission-mode")
+                .count(),
+            1
+        );
+        assert!(!args.contains(&"bypassPermissions".to_string()));
+
+        let options = parse_headless_args(
+            ProviderKind::Copilot,
+            os_args(&["--stream", "on", "hello"]),
+            None,
+        )
+        .unwrap();
+        let args = build_provider_args(ProviderKind::Copilot, &options, &options.prompt);
+        assert_eq!(
+            args.iter().filter(|arg| arg.as_str() == "--stream").count(),
+            1
+        );
+        assert!(args.contains(&"on".to_string()));
     }
 }

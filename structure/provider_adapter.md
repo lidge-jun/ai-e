@@ -36,9 +36,9 @@ Required responsibilities:
 | Provider | Class | Entry point | Key defaults |
 |---|---|---|---|
 | Claude Code | PTY | `claude` | `--dangerously-skip-permissions`, workspace trust auto-accept |
-| Codex CLI | Headless | `codex exec` | `--dangerously-bypass-approvals-and-sandbox` |
-| Gemini CLI | Headless | `gemini --prompt` | `--skip-trust --yolo` |
-| Grok CLI | Headless | `grok --single` | `--always-approve --permission-mode bypassPermissions` |
+| Codex CLI | Headless | `codex exec` | `--dangerously-bypass-approvals-and-sandbox --skip-git-repo-check` |
+| Gemini CLI | Headless | `gemini --prompt` | `--skip-trust --approval-mode yolo` plus home-root `--include-directories` |
+| Grok CLI | Headless | `grok --single` | `--no-alt-screen --always-approve --permission-mode bypassPermissions` |
 | Copilot CLI | Headless | `copilot --prompt` | `--allow-all --stream off` |
 
 ## Future Hardening

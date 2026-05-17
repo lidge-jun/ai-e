@@ -70,6 +70,17 @@ and a wrapper timeout. The provider owns its native output format.
 | Grok | `grok --single <prompt> ...` |
 | Copilot | `copilot --prompt <prompt> ...` |
 
+Headless hardening defaults mirror cli-jaw's direct provider launch policy:
+
+- Codex adds `--dangerously-bypass-approvals-and-sandbox` and
+  `--skip-git-repo-check` unless the caller explicitly supplies sandbox/approval
+  controls.
+- Gemini adds `--skip-trust`, `--approval-mode yolo`, and default home-root
+  `--include-directories` values so cwd-external home paths remain accessible.
+- Grok adds `--no-alt-screen`, `--always-approve`, and
+  `--permission-mode bypassPermissions` unless overridden.
+- Copilot adds `--allow-all --stream off` unless overridden.
+
 Headless timeout returns exit code `6`. Spawn failure returns exit code `4`.
 Provider exit codes are otherwise propagated.
 

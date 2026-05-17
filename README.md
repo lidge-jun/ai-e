@@ -143,9 +143,9 @@ CLI help:
 
 | Provider | Underlying command shape | Default hardening |
 |---|---|---|
-| Codex | `codex exec ... <prompt>` | Adds `--dangerously-bypass-approvals-and-sandbox` unless the caller supplied sandbox/approval flags. |
-| Gemini | `gemini --prompt <prompt>` | Adds `--skip-trust --yolo`. |
-| Grok | `grok --single <prompt>` | Adds `--always-approve --permission-mode bypassPermissions`. |
+| Codex | `codex exec ... <prompt>` | Adds `--dangerously-bypass-approvals-and-sandbox` unless the caller supplied sandbox/approval flags, plus `--skip-git-repo-check`. |
+| Gemini | `gemini --prompt <prompt>` | Adds `--skip-trust`, `--approval-mode yolo`, and home-root `--include-directories` values. |
+| Grok | `grok --single <prompt>` | Adds `--no-alt-screen`, `--always-approve`, and `--permission-mode bypassPermissions`. |
 | Copilot | `copilot --prompt <prompt>` | Adds `--allow-all --stream off`. |
 
 Provider binary overrides:

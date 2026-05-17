@@ -29,7 +29,7 @@ Safe help probes confirmed installed CLI surfaces:
 - `codex exec` supports non-interactive execution, `--model`, `--json`,
   `--cd`, and `--dangerously-bypass-approvals-and-sandbox`.
 - `gemini --prompt` supports headless mode, `--model`, `--output-format`, and
-  `--yolo`.
+  `--approval-mode yolo`.
 - `grok --single` supports single-turn mode, `--model`, `--output-format`, and
   `--always-approve`.
 - `copilot --prompt` supports non-interactive mode, `--model`,
@@ -57,3 +57,46 @@ Safe help probes confirmed installed CLI surfaces:
   - `ai-e gemini --provider-bin /bin/echo --model gemini-2.5-pro --output-format stream-json`
   - `ai-e grok --provider-bin /bin/echo --model auto --output-format stream-json`
   - `ai-e copilot --provider-bin /bin/echo --model gpt-5-mini --output-format stream-json`
+
+## 2026-05-17 cli-jaw Hardening Alignment
+
+Re-audited headless defaults against cli-jaw's live `src/agent/args.ts` launch
+policy instead of relying on provider help alone.
+
+Changes:
+
+- Codex now adds `--skip-git-repo-check` in addition to
+  `--dangerously-bypass-approvals-and-sandbox`.
+- Gemini now uses `--approval-mode yolo` instead of the shorter `--yolo`
+  spelling and injects home-root `--include-directories` values, matching
+  cli-jaw's external-path access guard.
+- Grok now adds `--no-alt-screen` alongside `--always-approve` and
+  `--permission-mode bypassPermissions`.
+- Copilot keeps `--allow-all --stream off` and the smoke/default model remains
+  `gpt-5-mini`.
+- Explicit caller-provided hardening flags are not duplicated; ai-e only fills
+  missing unattended defaults.
+
+Live smoke notes:
+
+- All provider binaries were present locally:
+  `codex`, `gemini`, `grok`, and `copilot`.
+- Controlled `/bin/echo` smoke confirmed the exact provider args:
+  - Codex: `exec --model gpt-5-mini --json --dangerously-bypass-approvals-and-sandbox --skip-git-repo-check ...`
+  - Gemini: `--model gemini-3-flash-preview --prompt ... --output-format stream-json --skip-trust --approval-mode yolo --include-directories /Users/jun`
+  - Grok: `--model grok-build --single ... --output-format streaming-json --no-alt-screen --always-approve --permission-mode bypassPermissions`
+  - Copilot: `--model gpt-5-mini --prompt ... --output-format json --allow-all --stream off`
+- Codex real smoke:
+  - `gpt-5-mini` returned a provider-side unsupported-model error for the
+    current ChatGPT-backed Codex account.
+  - `gpt-5.4` succeeded with `SMOKE_AI_E_CODEX_REAL_2`.
+- Gemini real smoke succeeded with `SMOKE_AI_E_GEMINI_REAL_1`; the CLI printed
+  YOLO mode enabled and accepted the prompt non-interactively.
+- Grok real smoke succeeded with `SMOKE_AI_E_GROK_REAL_1`.
+- Copilot real smoke succeeded with `gpt-5-mini` and
+  `SMOKE_AI_E_COPILOT_REAL_1`.
+
+Shared Claude fix:
+
+- `rate_limit_event` is now passed through by the transcript normalizer so
+  Claude 429 wait events can reach cli-jaw instead of being discarded.

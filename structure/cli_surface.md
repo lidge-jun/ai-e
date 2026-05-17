@@ -92,9 +92,9 @@ PTY/hook/transcript path.
 
 | Provider | Underlying command | Output mapping | Hardening defaults |
 |---|---|---|---|
-| Codex | `codex exec` | `--json` for `json` and `stream-json` | `--dangerously-bypass-approvals-and-sandbox` |
-| Gemini | `gemini --prompt` | `--output-format text|json|stream-json` | `--skip-trust --yolo` |
-| Grok | `grok --single` | `stream-json` maps to `streaming-json` | `--always-approve --permission-mode bypassPermissions` |
+| Codex | `codex exec` | `--json` for `json` and `stream-json` | `--dangerously-bypass-approvals-and-sandbox --skip-git-repo-check` |
+| Gemini | `gemini --prompt` | `--output-format text|json|stream-json` | `--skip-trust --approval-mode yolo` plus home-root `--include-directories` |
+| Grok | `grok --single` | `stream-json` maps to `streaming-json` | `--no-alt-screen --always-approve --permission-mode bypassPermissions` |
 | Copilot | `copilot --prompt` | `stream-json` maps to Copilot `json` JSONL | `--allow-all --stream off` |
 
 Shared headless flags:
