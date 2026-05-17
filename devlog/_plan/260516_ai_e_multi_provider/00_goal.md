@@ -29,6 +29,9 @@ Initial provider set:
 - No `claude-e` bin collision from this package.
 - Provider-explicit command shape: `ai-e <provider> ...`.
 - Wrapper timeout for headless providers.
+- Activity-aware timeout for the Claude PTY provider: transcript activity and
+  active tools keep the idle timeout from killing a live run, while a separate
+  hard cap prevents orphaned processes.
 - Conservative unattended defaults for each provider.
 - Provider binary env overrides.
 - Tests for arg builders and postinstall behavior.

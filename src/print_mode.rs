@@ -16,6 +16,8 @@ pub struct PrintModeOptions {
     pub prompt: String,
     pub output_format: String,
     pub timeout_ms: u64,
+    pub idle_timeout_ms: u64,
+    pub hard_timeout_ms: u64,
     pub claude_bin: String,
     pub cwd: Option<PathBuf>,
     pub cols: u16,
@@ -36,6 +38,8 @@ pub fn parse_print_mode_args(
     let mut input_format = "text".to_string();
     let mut output_format = "text".to_string();
     let mut timeout_ms = DEFAULT_TIMEOUT_MS;
+    let mut idle_timeout_ms: Option<u64> = None;
+    let mut hard_timeout_ms: u64 = 3_600_000;
     let mut claude_bin = resolve_claude_bin();
     let mut cwd: Option<PathBuf> = None;
     let mut cols = DEFAULT_COLS;
@@ -87,6 +91,19 @@ pub fn parse_print_mode_args(
                 timeout_ms = raw
                     .parse::<u64>()
                     .map_err(|_| format!("invalid --timeout-ms value: {raw}"))?;
+            }
+            "--idle-timeout-ms" => {
+                let raw = take_value(&args, &mut index, "--idle-timeout-ms", inline_value)?;
+                idle_timeout_ms = Some(
+                    raw.parse::<u64>()
+                        .map_err(|_| format!("invalid --idle-timeout-ms value: {raw}"))?,
+                );
+            }
+            "--hard-timeout-ms" => {
+                let raw = take_value(&args, &mut index, "--hard-timeout-ms", inline_value)?;
+                hard_timeout_ms = raw
+                    .parse::<u64>()
+                    .map_err(|_| format!("invalid --hard-timeout-ms value: {raw}"))?;
             }
             "--claude-bin" => {
                 claude_bin = take_value(&args, &mut index, "--claude-bin", inline_value)?;
@@ -220,10 +237,14 @@ pub fn parse_print_mode_args(
         return Err("prompt is empty".to_string());
     }
 
+    let effective_idle = idle_timeout_ms.unwrap_or(timeout_ms);
+
     Ok(PrintModeOptions {
         prompt: prompt.trim().to_string(),
         output_format,
         timeout_ms,
+        idle_timeout_ms: effective_idle,
+        hard_timeout_ms,
         claude_bin,
         cwd,
         cols,
@@ -256,8 +277,8 @@ pub fn config_from_options(options: PrintModeOptions) -> RunConfig {
         options.cwd,
         options.cols,
         options.rows,
-        options.timeout_ms,
-        3_600_000,
+        options.idle_timeout_ms,
+        options.hard_timeout_ms,
         options.output_format,
         options.resume,
         options.session_id,
@@ -607,6 +628,35 @@ mod tests {
         assert!(config.terminal_tools);
         assert!(!config.show_session_footer);
         assert_eq!(config.extra_args, Vec::<String>::new());
+    }
+
+    #[test]
+    fn maps_idle_and_hard_timeouts_to_config() {
+        let options = parse_print_mode_args(
+            os_args(&[
+                "--idle-timeout-ms",
+                "120000",
+                "--hard-timeout-ms",
+                "900000",
+                "inspect",
+            ]),
+            None,
+        )
+        .expect("parse print mode");
+        let config = config_from_options(options);
+
+        assert_eq!(config.idle_timeout_ms, 120_000);
+        assert_eq!(config.hard_timeout_ms, 900_000);
+    }
+
+    #[test]
+    fn maps_legacy_timeout_to_idle_timeout() {
+        let options = parse_print_mode_args(os_args(&["--timeout-ms", "120000", "inspect"]), None)
+            .expect("parse print mode");
+        let config = config_from_options(options);
+
+        assert_eq!(config.idle_timeout_ms, 120_000);
+        assert_eq!(config.hard_timeout_ms, 3_600_000);
     }
 
     #[test]

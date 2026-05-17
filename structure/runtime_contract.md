@@ -40,6 +40,18 @@ The Claude provider keeps the copied `claude-e` behavior:
 - tail Claude transcript JSONL;
 - synthesize text/json/stream-json output.
 
+Claude PTY timeout behavior is activity-aware:
+
+- `--idle-timeout-ms` expires only after no transcript activity is observed for
+  the configured window.
+- assistant/user transcript records, tool use, and tool result records refresh
+  the activity clock.
+- active tool calls suppress idle timeout until tool results drain the active
+  tool counter.
+- `--hard-timeout-ms` remains the absolute process cap.
+- `--timeout-ms` is retained as a backward-compatible alias for
+  `--idle-timeout-ms`.
+
 Claude binary resolution:
 
 1. `AI_E_CLAUDE_BIN`

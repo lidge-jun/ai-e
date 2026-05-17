@@ -129,6 +129,12 @@ Unless the caller already supplied `--permission-mode`,
 `--dangerously-skip-permissions` to avoid unattended tool runs hanging on
 permission prompts.
 
+The Claude provider uses activity-aware PTY timeouts. `--idle-timeout-ms`
+expires only after no transcript activity is observed for the configured
+window, and active Claude tool calls suppress idle timeout until tool results
+arrive. `--hard-timeout-ms` remains the absolute process cap. The legacy
+`--timeout-ms` flag is treated as an idle-timeout alias.
+
 ## Headless Providers
 
 Codex, Gemini, Grok, and Copilot are not routed through the Claude PTY lifecycle.

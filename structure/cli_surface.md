@@ -59,7 +59,7 @@ Wrapper-owned flags:
 |---|---|
 | `--input-format text|stream-json` | Reads plain stdin or extracts user text from JSONL messages. |
 | `--output-format text|json|stream-json` | Normalizes transcript output to the requested print-style shape. |
-| `--timeout-ms`, `--claude-bin`, `--cwd`, `--cols`, `--rows` | PTY wrapper controls for the Claude provider. |
+| `--idle-timeout-ms`, `--hard-timeout-ms`, `--timeout-ms`, `--claude-bin`, `--cwd`, `--cols`, `--rows` | PTY wrapper controls for the Claude provider. `--timeout-ms` remains an idle-timeout compatibility alias. |
 | `--session-id` | Uses the provided session id for the generated PTY session. |
 | `--no-session-persistence` | Suppresses generated session id. |
 | `--resume` / `-r` | Resumes the provided session id in the PTY path. |
