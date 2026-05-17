@@ -100,3 +100,36 @@ Shared Claude fix:
 
 - `rate_limit_event` is now passed through by the transcript normalizer so
   Claude 429 wait events can reach cli-jaw instead of being discarded.
+
+## 2026-05-17 Grok Shutdown Timing Comparison
+
+Compared direct Grok CLI against the Rust `target/release/ai-e grok` wrapper
+after a cli-jaw shutdown-delay report.
+
+Environment:
+
+- `grok 0.1.211 (2f2cd6d5c2)`
+- model: `grok-build`
+- direct output: `--output-format streaming-json`
+- ai-e output: `--output-format stream-json`
+
+Simple one-line answer prompt, 5 runs each:
+
+| Path | `text -> end` avg | `end -> close` avg | `last event -> close` avg |
+|------|-------------------|--------------------|---------------------------|
+| direct `grok` | 0.045s | 0.375s | 0.375s |
+| `ai-e grok` | 0.018s | 0.333s | 0.333s |
+
+Tool-use prompt (`pwd` only, no file edits), 2 runs each:
+
+| Path | `text -> end` range | `end -> close` range |
+|------|---------------------|----------------------|
+| direct `grok` | 0.003-0.028s | 0.215-0.342s |
+| `ai-e grok` | 0.032-0.036s | 0.248-0.349s |
+
+Conclusion:
+
+- The current Grok CLI does not reproduce the earlier 3-9s shutdown delay.
+- Rust `ai-e grok` does not add meaningful shutdown delay over direct `grok`.
+- No ai-e Grok shutdown watchdog is justified now; use the existing headless
+  hard timeout for hung processes and revisit only with new trace data.
