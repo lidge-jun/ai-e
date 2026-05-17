@@ -257,6 +257,7 @@ pub fn config_from_options(options: PrintModeOptions) -> RunConfig {
         options.cols,
         options.rows,
         options.timeout_ms,
+        3_600_000,
         options.output_format,
         options.resume,
         options.session_id,
