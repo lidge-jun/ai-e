@@ -18,7 +18,7 @@ if [ "$MODE" = "--publish" ]; then
     echo "[ai-e:release] refusing to publish with uncommitted changes" >&2
     exit 1
   fi
-  bash scripts/ensure-npm-auth.sh ai-e
+  bash scripts/ensure-npm-auth.sh @bitkyc08/ai-e
 fi
 
 VERSION="$(node -p "require('./package.json').version")"

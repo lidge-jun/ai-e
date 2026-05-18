@@ -7,7 +7,7 @@
 #   ./scripts/release.sh 1.2.0    # explicit version
 set -euo pipefail
 
-PKG_NAME="ai-e"
+PKG_NAME="@bitkyc08/ai-e"
 
 cd "$(dirname "$0")/.."
 

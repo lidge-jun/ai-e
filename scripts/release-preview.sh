@@ -5,7 +5,7 @@
 #   ./scripts/release-preview.sh 1.2.0    # explicit preview base version
 set -euo pipefail
 
-PKG_NAME="ai-e"
+PKG_NAME="@bitkyc08/ai-e"
 
 cd "$(dirname "$0")/.."
 

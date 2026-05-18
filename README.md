@@ -1,7 +1,7 @@
 # ai-e
 
 [![Tests](https://github.com/lidge-jun/ai-e/actions/workflows/test.yml/badge.svg)](https://github.com/lidge-jun/ai-e/actions/workflows/test.yml)
-[![npm version](https://img.shields.io/npm/v/ai-e.svg)](https://www.npmjs.com/package/ai-e)
+[![npm version](https://img.shields.io/npm/v/@bitkyc08/ai-e.svg)](https://www.npmjs.com/package/@bitkyc08/ai-e)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/runtime-Rust-orange.svg)](Cargo.toml)
 
@@ -11,7 +11,7 @@ The goal is one installable command that can drive Claude Code, Codex, Gemini,
 Grok, and future interactive agent CLIs through the same process contract:
 
 ```bash
-npm install -g ai-e
+npm install -g @bitkyc08/ai-e
 
 ai-e claude "your prompt here"
 ai-e claude --output-format json "summarize this commit" < commit.diff
@@ -52,13 +52,13 @@ stable result object.
 ## Install
 
 ```bash
-npm install -g ai-e
+npm install -g @bitkyc08/ai-e
 ```
 
 Optional one-shot usage:
 
 ```bash
-npx ai-e claude "your prompt here"
+npx @bitkyc08/ai-e claude "your prompt here"
 ```
 
 From source:

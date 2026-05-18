@@ -1,5 +1,5 @@
 {
-  "name": "ai-e",
+  "name": "@bitkyc08/ai-e",
   "version": "0.1.1",
   "description": "Modular exec wrapper for interactive and headless AI CLIs",
   "keywords": [
