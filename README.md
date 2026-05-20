@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/runtime-Rust-orange.svg)](Cargo.toml)
 
-`ai-e` is a modular exec layer for interactive and headless AI CLIs.
+`ai-e` is a modular PTY exec layer for AI CLIs.
 
 The goal is one installable command that can drive Claude Code, Codex, Gemini,
 Grok, and future interactive agent CLIs through the same process contract:
@@ -18,9 +18,11 @@ ai-e claude --output-format json "summarize this commit" < commit.diff
 ai-e claude --output-format stream-json "audit src/" --verbose | jq .
 ```
 
-The current runnable provider paths are split in two groups: Claude uses the
-PTY runtime copied from `claude-e`, while Codex, Gemini, Grok, and Copilot use
-their native headless/non-interactive CLI surfaces.
+The runnable provider paths now use PTY supervision. Claude uses the copied
+`claude-e` interactive lifecycle; Codex, Gemini, Grok, and Copilot use their
+native prompt submission modes while the child process still runs inside a PTY.
+AGY/Antigravity is intentionally excluded because the installed `agy` command
+opens a full TUI and does not expose the same prompt-mode contract.
 
 ## Why This Exists
 
@@ -44,10 +46,10 @@ stable result object.
 | Provider | Command | Status | Notes |
 |---|---|---|---|
 | Claude Code | `ai-e claude ...` | PTY-backed | Copied from the hardened `claude-e` runtime as the first provider. |
-| Codex CLI | `ai-e codex ...` | Headless | Uses `codex exec`; tests pin the `gpt-5-mini` argument shape. |
-| Gemini CLI | `ai-e gemini ...` | Headless | Uses `gemini --prompt`. |
-| Grok CLI | `ai-e grok ...` | Headless | Uses `grok --single`. |
-| Copilot CLI | `ai-e copilot ...` | Headless | Uses `copilot --prompt`; also documentable through `gh copilot --`. |
+| Codex CLI | `ai-e codex ...` | PTY prompt-mode | Uses `codex exec`; tests pin the `gpt-5-mini` argument shape. |
+| Gemini CLI | `ai-e gemini ...` | PTY prompt-mode | Uses `gemini --prompt`. |
+| Grok CLI | `ai-e grok ...` | PTY prompt-mode | Uses `grok --single`. |
+| Copilot CLI | `ai-e copilot ...` | PTY prompt-mode | Uses `copilot --prompt`; also documentable through `gh copilot --`. |
 
 ## Install
 
@@ -135,9 +137,10 @@ window, and active Claude tool calls suppress idle timeout until tool results
 arrive. `--hard-timeout-ms` remains the absolute process cap. The legacy
 `--timeout-ms` flag is treated as an idle-timeout alias.
 
-## Headless Providers
+## PTY Prompt-Mode Providers
 
-Codex, Gemini, Grok, and Copilot are not routed through the Claude PTY lifecycle.
+Codex, Gemini, Grok, and Copilot route through the wrapper PTY supervisor but
+submit the prompt through each provider's native one-shot/prompt flag.
 They use the safest documented non-interactive surfaces from their installed
 CLI help:
 

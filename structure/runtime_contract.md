@@ -1,13 +1,15 @@
 # Runtime Contract
 
-## Provider Classes
+## Provider Class
 
-`ai-e` supports two runtime classes:
+`ai-e` supports one runtime class for implemented providers: PTY-supervised
+execution. Claude uses interactive prompt injection and transcript tailing.
+Codex, Gemini, Grok, and Copilot use provider-native prompt submission inside
+the PTY and relay provider-native JSONL/text output to the caller.
 
-- PTY providers: interactive CLIs that need terminal automation. Current:
-  `claude`.
-- Headless providers: CLIs with native non-interactive execution. Current:
-  `codex`, `gemini`, `grok`, `copilot`.
+AGY/Antigravity is not an implemented provider. The installed `agy` command
+opens a full TUI and is documented only as a manual/runtime-adjacent tool until
+it exposes a prompt-mode contract that can be supervised without losing state.
 
 ## Command Input
 
@@ -58,10 +60,11 @@ Claude binary resolution:
 2. `CLAUDE_BIN`
 3. `claude`
 
-## Headless Runtime
+## PTY Prompt-Mode Runtime
 
-Headless providers spawn the provider CLI directly with inherited stdout/stderr
-and a wrapper timeout. The provider owns its native output format.
+Prompt-mode providers spawn the provider CLI inside a PTY and tee the PTY bytes
+to stdout. The provider owns its native output format; cli-jaw consumes the same
+provider JSONL projection it already parses for direct provider CLIs.
 
 | Provider | Spawn shape |
 |---|---|
@@ -70,7 +73,7 @@ and a wrapper timeout. The provider owns its native output format.
 | Grok | `grok --single <prompt> ...` |
 | Copilot | `copilot --prompt <prompt> ...` |
 
-Headless hardening defaults mirror cli-jaw's direct provider launch policy:
+Prompt-mode hardening defaults mirror cli-jaw's direct provider launch policy:
 
 - Codex adds `--dangerously-bypass-approvals-and-sandbox` and
   `--skip-git-repo-check` unless the caller explicitly supplies sandbox/approval
@@ -81,7 +84,7 @@ Headless hardening defaults mirror cli-jaw's direct provider launch policy:
   `--permission-mode bypassPermissions` unless overridden.
 - Copilot adds `--allow-all --stream off` unless overridden.
 
-Headless timeout returns exit code `6`. Spawn failure returns exit code `4`.
+Prompt-mode timeout returns exit code `6`. Spawn failure returns exit code `4`.
 Provider exit codes are otherwise propagated.
 
 ## Runtime Events
@@ -99,9 +102,10 @@ Multi-provider additions use generic event names:
 {"type":"jaw_runtime","event":"provider_spawned","provider":"claude","pid":12345}
 ```
 
-Headless providers currently relay provider stdout/stderr directly and do not
-wrap provider-native JSON into `jaw_runtime` events. That is intentional until
-each provider's JSON event stability is audited.
+PTY prompt-mode providers currently relay provider PTY output directly and do
+not wrap provider-native JSON into `jaw_runtime` events. That preserves
+cli-jaw's existing provider parsers while the thin projection contract is
+audited per provider.
 
 ## Session Footer
 
@@ -112,7 +116,8 @@ Claude print-compatible mode emits a stderr footer by default:
 [ai-e] resume: ai-e claude --resume <session-id> "your next prompt"
 ```
 
-Headless provider resume behavior remains provider-native.
+Prompt-mode provider resume behavior remains provider-native and is only
+enabled by callers once the provider-specific resume smoke is proven.
 
 ## Structured Output
 
