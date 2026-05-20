@@ -1,7 +1,11 @@
 use std::ffi::OsString;
+use std::io::{Read, Write};
 use std::path::PathBuf;
-use std::process::{Command, Stdio};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
+
+use portable_pty::{CommandBuilder, PtySize, native_pty_system};
 
 use crate::print_mode;
 use crate::providers::ProviderKind;
@@ -46,7 +50,7 @@ pub fn run_provider(provider: ProviderKind, raw_args: Vec<OsString>) -> i32 {
     };
 
     let provider_args = build_provider_args(provider, &options, &prompt);
-    spawn_with_timeout(
+    spawn_pty_with_timeout(
         provider,
         &options.provider_bin,
         &provider_args,
@@ -330,37 +334,98 @@ fn build_copilot_args(options: &HeadlessOptions, prompt: &str) -> Vec<String> {
     args
 }
 
-fn spawn_with_timeout(
+fn spawn_pty_with_timeout(
     provider: ProviderKind,
     bin: &str,
     args: &[String],
     cwd: Option<&std::path::Path>,
     timeout_ms: u64,
 ) -> i32 {
-    let mut command = Command::new(bin);
-    command.args(args);
-    if let Some(cwd) = cwd {
-        command.current_dir(cwd);
-    }
-    command.stdin(Stdio::null());
-    command.stdout(Stdio::inherit());
-    command.stderr(Stdio::inherit());
-
-    let mut child = match command.spawn() {
-        Ok(child) => child,
+    let pty_system = native_pty_system();
+    let pair = match pty_system.openpty(PtySize {
+        rows: 40,
+        cols: 120,
+        pixel_width: 0,
+        pixel_height: 0,
+    }) {
+        Ok(pair) => pair,
         Err(e) => {
             eprintln!(
-                "ai-e: failed to spawn {} provider via {bin}: {e}",
+                "ai-e: failed to open PTY for {} provider: {e}",
                 provider.id()
             );
             return 4;
         }
     };
 
+    let mut command = CommandBuilder::new(bin);
+    command.args(args);
+    if let Some(cwd) = cwd {
+        command.cwd(cwd);
+    }
+    command.env("TERM", "xterm-256color");
+
+    let mut child = match pair.slave.spawn_command(command) {
+        Ok(child) => child,
+        Err(e) => {
+            eprintln!(
+                "ai-e: failed to spawn {} provider in PTY via {bin}: {e}",
+                provider.id()
+            );
+            return 4;
+        }
+    };
+
+    drop(pair.slave);
+
+    let mut reader = match pair.master.try_clone_reader() {
+        Ok(reader) => reader,
+        Err(e) => {
+            let _ = child.kill();
+            let _ = child.wait();
+            eprintln!(
+                "ai-e: failed to open PTY reader for {} provider: {e}",
+                provider.id()
+            );
+            return 4;
+        }
+    };
+    drop(pair.master);
+
+    let stop = Arc::new(AtomicBool::new(false));
+    let last_activity_ms = Arc::new(AtomicU64::new(epoch_ms()));
+    let reader_stop = Arc::clone(&stop);
+    let reader_activity = Arc::clone(&last_activity_ms);
+    let provider_id = provider.id().to_string();
+    let reader_handle = std::thread::spawn(move || {
+        let mut buf = [0u8; 8192];
+        let mut stdout = std::io::stdout().lock();
+        let mut line_buf = Vec::<u8>::new();
+        while !reader_stop.load(Ordering::Relaxed) {
+            match reader.read(&mut buf) {
+                Ok(0) => break,
+                Ok(n) => {
+                    reader_activity.store(epoch_ms(), Ordering::Relaxed);
+                    if let Err(e) =
+                        write_projected_pty_chunk(provider, &buf[..n], &mut line_buf, &mut stdout)
+                    {
+                        eprintln!("ai-e: stdout write failed for {provider_id} provider: {e}");
+                        break;
+                    }
+                }
+                Err(e) => {
+                    log::debug!("{} PTY read error: {e}", provider_id);
+                    break;
+                }
+            }
+        }
+        let _ = flush_projected_pty_remainder(provider, &mut line_buf, &mut stdout);
+    });
+
     let deadline = Instant::now() + Duration::from_millis(timeout_ms);
-    loop {
+    let code = loop {
         match child.try_wait() {
-            Ok(Some(status)) => return status.code().unwrap_or(1),
+            Ok(Some(status)) => break status.exit_code() as i32,
             Ok(None) => {
                 if Instant::now() >= deadline {
                     let _ = child.kill();
@@ -369,16 +434,20 @@ fn spawn_with_timeout(
                         "ai-e: {} provider timed out after {timeout_ms}ms",
                         provider.id()
                     );
-                    return 6;
+                    break 6;
                 }
                 std::thread::sleep(Duration::from_millis(100));
             }
             Err(e) => {
                 eprintln!("ai-e: failed to wait for {} provider: {e}", provider.id());
-                return 1;
+                break 1;
             }
         }
-    }
+    };
+
+    stop.store(true, Ordering::Relaxed);
+    let _ = reader_handle.join();
+    code
 }
 
 fn validate_output_format(provider: ProviderKind, value: &str) -> Result<(), String> {
@@ -457,6 +526,116 @@ fn extra_arg_has_value(args: &[String], flag: &str, value: &str) -> bool {
     args.windows(2)
         .any(|pair| pair[0] == flag && pair[1] == value)
         || args.iter().any(|arg| arg == &format!("{flag}={value}"))
+}
+
+fn write_projected_pty_chunk<W: Write>(
+    provider: ProviderKind,
+    chunk: &[u8],
+    line_buf: &mut Vec<u8>,
+    stdout: &mut W,
+) -> std::io::Result<()> {
+    if !matches!(provider, ProviderKind::Copilot) {
+        stdout.write_all(chunk)?;
+        stdout.flush()?;
+        return Ok(());
+    }
+
+    for &byte in chunk {
+        if byte == b'\n' {
+            write_projected_pty_line(provider, line_buf, stdout)?;
+            line_buf.clear();
+        } else {
+            line_buf.push(byte);
+        }
+    }
+    stdout.flush()
+}
+
+fn flush_projected_pty_remainder<W: Write>(
+    provider: ProviderKind,
+    line_buf: &mut Vec<u8>,
+    stdout: &mut W,
+) -> std::io::Result<()> {
+    if line_buf.is_empty() {
+        return Ok(());
+    }
+    if matches!(provider, ProviderKind::Copilot) {
+        write_projected_pty_line(provider, line_buf, stdout)?;
+        line_buf.clear();
+    } else {
+        stdout.write_all(line_buf)?;
+        line_buf.clear();
+    }
+    stdout.flush()
+}
+
+fn write_projected_pty_line<W: Write>(
+    provider: ProviderKind,
+    line_buf: &[u8],
+    stdout: &mut W,
+) -> std::io::Result<()> {
+    let line = std::str::from_utf8(line_buf).unwrap_or("");
+    let projected = if matches!(provider, ProviderKind::Copilot) {
+        project_copilot_jsonl_line(line)
+    } else {
+        None
+    };
+    match projected {
+        Some(line) if line.is_empty() => Ok(()),
+        Some(line) => writeln!(stdout, "{line}"),
+        None => {
+            stdout.write_all(line_buf)?;
+            stdout.write_all(b"\n")
+        }
+    }
+}
+
+fn project_copilot_jsonl_line(line: &str) -> Option<String> {
+    let trimmed = line.trim_end_matches('\r');
+    let mut value = serde_json::from_str::<serde_json::Value>(trimmed).ok()?;
+    if is_empty_copilot_reasoning_event(&value) {
+        return Some(String::new());
+    }
+    strip_copilot_opaque_fields(&mut value);
+    serde_json::to_string(&value).ok()
+}
+
+fn is_empty_copilot_reasoning_event(value: &serde_json::Value) -> bool {
+    value
+        .get("type")
+        .and_then(|value| value.as_str())
+        .is_some_and(|event_type| event_type == "assistant.reasoning")
+        && value
+            .pointer("/data/content")
+            .and_then(|value| value.as_str())
+            .unwrap_or("")
+            .is_empty()
+}
+
+fn strip_copilot_opaque_fields(value: &mut serde_json::Value) {
+    match value {
+        serde_json::Value::Object(map) => {
+            map.remove("reasoningOpaque");
+            map.remove("encryptedContent");
+            map.remove("reasoningId");
+            for child in map.values_mut() {
+                strip_copilot_opaque_fields(child);
+            }
+        }
+        serde_json::Value::Array(items) => {
+            for child in items {
+                strip_copilot_opaque_fields(child);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn epoch_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
 }
 
 #[cfg(test)]
@@ -584,5 +763,20 @@ mod tests {
             1
         );
         assert!(args.contains(&"on".to_string()));
+    }
+
+    #[test]
+    fn copilot_projection_strips_opaque_fields() {
+        let line = r#"{"type":"assistant.message","data":{"content":"ok","reasoningOpaque":"secret","nested":{"encryptedContent":"secret"}}}"#;
+        let projected = project_copilot_jsonl_line(line).unwrap();
+        assert!(projected.contains(r#""content":"ok""#));
+        assert!(!projected.contains("reasoningOpaque"));
+        assert!(!projected.contains("encryptedContent"));
+    }
+
+    #[test]
+    fn copilot_projection_drops_empty_reasoning_events() {
+        let line = r#"{"type":"assistant.reasoning","data":{"content":"","reasoningId":"opaque"},"ephemeral":true}"#;
+        assert_eq!(project_copilot_jsonl_line(line), Some(String::new()));
     }
 }

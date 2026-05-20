@@ -75,7 +75,10 @@ impl ProviderKind {
     }
 
     pub fn is_pty_provider(self) -> bool {
-        matches!(self, Self::ClaudeCode)
+        matches!(
+            self,
+            Self::ClaudeCode | Self::Codex | Self::Gemini | Self::Grok | Self::Copilot
+        )
     }
 }
 
@@ -119,5 +122,22 @@ mod tests {
         let (provider, args) = split_provider_args(os_args(&["--model", "opus", "hello"]));
         assert_eq!(provider, ProviderKind::ClaudeCode);
         assert_eq!(args, os_args(&["--model", "opus", "hello"]));
+    }
+
+    #[test]
+    fn all_supported_providers_are_pty_backed() {
+        for provider in [
+            ProviderKind::ClaudeCode,
+            ProviderKind::Codex,
+            ProviderKind::Gemini,
+            ProviderKind::Grok,
+            ProviderKind::Copilot,
+        ] {
+            assert!(
+                provider.is_pty_provider(),
+                "{} should use PTY",
+                provider.id()
+            );
+        }
     }
 }

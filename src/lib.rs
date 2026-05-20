@@ -43,7 +43,7 @@ pub fn main_entry() {
         std::process::exit(0);
     }
 
-    if !provider.is_pty_provider() {
+    if provider.is_pty_provider() && !matches!(provider, ProviderKind::ClaudeCode) {
         let exit_code = headless::run_provider(provider, raw_args);
         std::process::exit(exit_code);
     }
@@ -166,10 +166,10 @@ Usage:
 
 Providers:
   claude       Implemented. PTY-backed Claude Code execution.
-  codex        Headless adapter using codex exec.
-  gemini       Headless adapter using gemini --prompt.
-  grok         Headless adapter using grok --single.
-  copilot      Headless adapter using copilot --prompt.
+  codex        PTY prompt-mode adapter using codex exec.
+  gemini       PTY prompt-mode adapter using gemini --prompt.
+  grok         PTY prompt-mode adapter using grok --single.
+  copilot      PTY prompt-mode adapter using copilot --prompt.
 
 Default provider:
   If the provider is omitted, ai-e currently defaults to claude for bootstrap
@@ -177,7 +177,7 @@ Default provider:
 
 Execution modes:
   claude uses the interactive PTY path copied from claude-e.
-  codex/gemini/grok/copilot use their native headless CLI surfaces.
+  codex/gemini/grok/copilot use native prompt-mode CLI surfaces inside PTY.
 
 Options:
   -p, --print                              Print-compatible mode marker
