@@ -56,6 +56,12 @@
     "smoke": "bash scripts/smoke.sh",
     "install:local": "cargo install --path . --locked"
   },
+  "optionalDependencies": {
+    "@bitkyc08/ai-e-darwin-arm64": "0.1.2",
+    "@bitkyc08/ai-e-darwin-x64": "0.1.2",
+    "@bitkyc08/ai-e-linux-x64": "0.1.2",
+    "@bitkyc08/ai-e-linux-arm64": "0.1.2"
+  },
   "files": [
     "bin/",
     "scripts/",

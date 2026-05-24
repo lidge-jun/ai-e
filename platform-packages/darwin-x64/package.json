@@ -1,0 +1,10 @@
+{
+  "name": "@bitkyc08/ai-e-darwin-x64",
+  "version": "0.1.2",
+  "description": "Prebuilt ai-e binary for macOS x64 (Intel)",
+  "license": "MIT",
+  "os": ["darwin"],
+  "cpu": ["x64"],
+  "files": ["bin/"],
+  "publishConfig": { "access": "public" }
+}

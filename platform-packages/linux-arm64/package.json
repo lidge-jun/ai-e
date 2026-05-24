@@ -1,0 +1,11 @@
+{
+  "name": "@bitkyc08/ai-e-linux-arm64",
+  "version": "0.1.2",
+  "description": "Prebuilt ai-e binary for Linux ARM64",
+  "license": "MIT",
+  "os": ["linux"],
+  "cpu": ["arm64"],
+  "libc": ["glibc"],
+  "files": ["bin/"],
+  "publishConfig": { "access": "public" }
+}
