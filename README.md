@@ -246,6 +246,21 @@ npm run pack:dry
 npm run publish:dry-run
 ```
 
+### Prebuilt Package Contract
+
+The main `@bitkyc08/ai-e` package declares one optional platform package per
+supported OS/architecture. The main package version, every
+`optionalDependencies` version, and every `platform-packages/*/package.json`
+version must match before a release is considered publishable.
+`npm run test:postinstall` checks this contract, and
+`scripts/sync-package-versions.mjs <version>` updates all package metadata for a
+workflow release version.
+
+The GitHub release workflow also syncs Cargo metadata to the requested workflow
+version before building platform packages and before publishing the main package.
+This prevents the main package from pointing at platform package versions that
+were never built.
+
 Manual Claude smoke when auth is available:
 
 ```bash

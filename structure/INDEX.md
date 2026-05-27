@@ -16,7 +16,7 @@ one-shot CLI surfaces.
 | Runtime config | `src/config.rs`, `src/protocol.rs` | run ids, session ids, runtime JSONL envelope |
 | Terminal handling | `src/terminal.rs`, `src/cleanup.rs`, `src/sanitize.rs` | PTY terminal responses, prompt safety, process cleanup |
 | Print compatibility | `src/print_mode.rs` | `-p`-style prompt/stdin/output parsing for the Claude provider |
-| Packaging | `Cargo.toml`, `package.json`, `bin/`, `scripts/`, `.github/workflows/` | Rust build, npm install, dry-run/publish/release scripts |
+| Packaging | `Cargo.toml`, `package.json`, `bin/`, `scripts/`, `.github/workflows/`, `platform-packages/`, `tests/package-contract.test.cjs` | Rust build, prebuilt platform packages, npm install, dry-run/publish/release scripts |
 
 ## Documents
 
@@ -33,3 +33,4 @@ one-shot CLI surfaces.
 - AGY/Antigravity is intentionally not a provider id.
 - No provider-specific bins are exposed by this npm package yet.
 - `jaw_runtime` envelope remains for cli-jaw compatibility, with generic `provider_spawned` events added for multi-provider use.
+- Main package `optionalDependencies` and `platform-packages/*` versions must match the main package version before release.
