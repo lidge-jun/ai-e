@@ -1,6 +1,6 @@
 {
   "name": "@bitkyc08/ai-e",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Modular exec wrapper for interactive and headless AI CLIs",
   "keywords": [
     "ai",
@@ -57,10 +57,10 @@
     "install:local": "cargo install --path . --locked"
   },
   "optionalDependencies": {
-    "@bitkyc08/ai-e-darwin-arm64": "0.1.3",
-    "@bitkyc08/ai-e-darwin-x64": "0.1.3",
-    "@bitkyc08/ai-e-linux-x64": "0.1.3",
-    "@bitkyc08/ai-e-linux-arm64": "0.1.3"
+    "@bitkyc08/ai-e-darwin-arm64": "0.1.4",
+    "@bitkyc08/ai-e-darwin-x64": "0.1.4",
+    "@bitkyc08/ai-e-linux-x64": "0.1.4",
+    "@bitkyc08/ai-e-linux-arm64": "0.1.4"
   },
   "files": [
     "bin/",
