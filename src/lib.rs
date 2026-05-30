@@ -4,6 +4,8 @@ mod cleanup;
 mod config;
 mod headless;
 mod hook;
+mod interactive;
+mod interactive_providers;
 mod normalize;
 mod print_mode;
 mod protocol;
@@ -51,6 +53,12 @@ pub fn main_entry() {
     }
 
     if provider.is_headless_provider() {
+        // Check for --interactive flag: route to interactive bypass engine
+        if has_interactive_flag(&raw_args) {
+            let raw_args_filtered = remove_interactive_flag(raw_args);
+            let exit_code = run_interactive_provider(provider, raw_args_filtered);
+            std::process::exit(exit_code);
+        }
         let exit_code = headless::run_provider(provider, raw_args);
         std::process::exit(exit_code);
     }
@@ -711,6 +719,90 @@ fn emit_session_footer(config: &RunConfig, session_id: &str) {
     eprintln!();
     eprintln!("[ai-e] session: {session_id}");
     eprintln!("[ai-e] resume: ai-e claude --resume {session_id} \"your next prompt\"");
+}
+
+fn has_interactive_flag(args: &[std::ffi::OsString]) -> bool {
+    args.iter()
+        .any(|arg| arg.to_str() == Some("--interactive"))
+}
+
+fn remove_interactive_flag(args: Vec<std::ffi::OsString>) -> Vec<std::ffi::OsString> {
+    args.into_iter()
+        .filter(|arg| arg.to_str() != Some("--interactive"))
+        .collect()
+}
+
+fn run_interactive_provider(provider: ProviderKind, raw_args: Vec<std::ffi::OsString>) -> i32 {
+    let stdin_prompt = match print_mode::read_stdin_if_piped() {
+        Ok(input) => input,
+        Err(e) => {
+            eprintln!("ai-e: {e}");
+            return 16;
+        }
+    };
+
+    let options = match headless::parse_headless_args(provider, raw_args, stdin_prompt) {
+        Ok(options) => options,
+        Err(e) => {
+            eprintln!("ai-e: {e}");
+            return 16;
+        }
+    };
+
+    let cwd = options
+        .cwd
+        .clone()
+        .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
+
+    let config = interactive::InteractiveConfig::new(
+        provider,
+        options.provider_bin.clone(),
+        options.prompt.clone(),
+        cwd,
+        extract_resume_from_extra(&options.extra_args),
+        options.model.clone(),
+        filter_interactive_extra_args(&options.extra_args),
+        options.show_session_footer,
+    );
+
+    interactive::run_interactive(config)
+}
+
+fn extract_resume_from_extra(extra_args: &[String]) -> Option<String> {
+    let mut i = 0;
+    while i < extra_args.len() {
+        match extra_args[i].as_str() {
+            "--resume" | "--resume-id" | "-r" => {
+                return extra_args.get(i + 1).cloned();
+            }
+            s if s.starts_with("--resume=") => {
+                return Some(s.trim_start_matches("--resume=").to_string());
+            }
+            _ => {}
+        }
+        i += 1;
+    }
+    None
+}
+
+fn filter_interactive_extra_args(extra_args: &[String]) -> Vec<String> {
+    let mut filtered = Vec::new();
+    let mut i = 0;
+    while i < extra_args.len() {
+        match extra_args[i].as_str() {
+            "--resume" | "--resume-id" | "-r" => {
+                i += 2; // skip flag + value
+            }
+            s if s.starts_with("--resume=") => {
+                i += 1;
+            }
+            _ => {
+                filtered.push(extra_args[i].clone());
+                i += 1;
+            }
+        }
+    }
+    filtered
 }
 
 fn wait_transcript_stable(sentinel_path: &std::path::Path, stable_ms: u64) {
