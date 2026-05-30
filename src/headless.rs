@@ -224,7 +224,8 @@ pub fn parse_headless_args(
             | "--no-session-footer"
             | "--auto-accept-workspace-trust"
             | "--no-auto-accept-workspace-trust"
-            | "--interactive" => {
+            | "--interactive"
+            | "--headless" => {
                 if flag == "--no-session-footer" {
                     show_session_footer = false;
                 }

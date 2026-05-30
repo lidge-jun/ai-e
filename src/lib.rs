@@ -53,13 +53,16 @@ pub fn main_entry() {
     }
 
     if provider.is_headless_provider() {
-        // Check for --interactive flag: route to interactive bypass engine
-        if has_interactive_flag(&raw_args) {
-            let raw_args_filtered = remove_interactive_flag(raw_args);
-            let exit_code = run_interactive_provider(provider, raw_args_filtered);
+        // --headless / -p explicitly requests the legacy one-shot path (deprecated)
+        if has_headless_flag(&raw_args) {
+            let raw_args_filtered = remove_flag(&raw_args, "--headless");
+            let raw_args_filtered = remove_flag(&raw_args_filtered, "-p");
+            let exit_code = headless::run_provider(provider, raw_args_filtered);
             std::process::exit(exit_code);
         }
-        let exit_code = headless::run_provider(provider, raw_args);
+        // Default: interactive bypass engine
+        let raw_args_filtered = remove_flag(&raw_args, "--interactive");
+        let exit_code = run_interactive_provider(provider, raw_args_filtered);
         std::process::exit(exit_code);
     }
 
@@ -721,14 +724,17 @@ fn emit_session_footer(config: &RunConfig, session_id: &str) {
     eprintln!("[ai-e] resume: ai-e claude --resume {session_id} \"your next prompt\"");
 }
 
-fn has_interactive_flag(args: &[std::ffi::OsString]) -> bool {
-    args.iter()
-        .any(|arg| arg.to_str() == Some("--interactive"))
+fn has_headless_flag(args: &[std::ffi::OsString]) -> bool {
+    args.iter().any(|arg| {
+        let s = arg.to_str().unwrap_or("");
+        s == "--headless" || s == "-p"
+    })
 }
 
-fn remove_interactive_flag(args: Vec<std::ffi::OsString>) -> Vec<std::ffi::OsString> {
-    args.into_iter()
-        .filter(|arg| arg.to_str() != Some("--interactive"))
+fn remove_flag(args: &[std::ffi::OsString], flag: &str) -> Vec<std::ffi::OsString> {
+    args.iter()
+        .filter(|arg| arg.to_str() != Some(flag))
+        .cloned()
         .collect()
 }
 
