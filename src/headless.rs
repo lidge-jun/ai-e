@@ -285,6 +285,7 @@ pub fn build_provider_args(
         ProviderKind::Grok => build_grok_args(options, prompt),
         ProviderKind::Copilot => build_copilot_args(options, prompt),
         ProviderKind::Kiro => build_kiro_args(options, prompt),
+        ProviderKind::Agy => build_agy_args(options, prompt),
     }
 }
 
@@ -405,6 +406,18 @@ fn build_kiro_args(options: &HeadlessOptions, prompt: &str) -> Vec<String> {
     }
     args.extend(filtered_extra);
     args.push(prompt.to_string());
+    args
+}
+
+fn build_agy_args(options: &HeadlessOptions, prompt: &str) -> Vec<String> {
+    let mut args = vec!["-p".to_string(), prompt.to_string()];
+    if !contains_any(&options.extra_args, &["--dangerously-skip-permissions"]) {
+        args.push("--dangerously-skip-permissions".to_string());
+    }
+    if !contains_any(&options.extra_args, &["--print-timeout"]) {
+        args.extend(["--print-timeout".to_string(), "10m".to_string()]);
+    }
+    args.extend(options.extra_args.clone());
     args
 }
 
@@ -701,7 +714,7 @@ fn spawn_pipe_with_timeout(
 fn validate_output_format(provider: ProviderKind, value: &str) -> Result<(), String> {
     let allowed = match provider {
         ProviderKind::Codex | ProviderKind::Copilot => &["text", "json", "stream-json"][..],
-        ProviderKind::Gemini | ProviderKind::Grok | ProviderKind::Kiro => {
+        ProviderKind::Gemini | ProviderKind::Grok | ProviderKind::Kiro | ProviderKind::Agy => {
             &["text", "json", "stream-json"][..]
         }
         ProviderKind::ClaudeCode => unreachable!("Claude Code uses print_mode parser"),

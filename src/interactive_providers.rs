@@ -19,6 +19,7 @@ pub fn build_interactive_args(
             build_copilot_interactive(prompt, resume_session, model, extra_args)
         }
         ProviderKind::Kiro => build_kiro_interactive(prompt, resume_session, model, extra_args),
+        ProviderKind::Agy => build_agy_interactive(prompt, resume_session, extra_args),
         _ => Vec::new(),
     }
 }
@@ -156,10 +157,32 @@ fn build_kiro_interactive(
     args
 }
 
+fn build_agy_interactive(
+    prompt: Option<&str>,
+    resume_session: Option<&str>,
+    extra_args: &[String],
+) -> Vec<String> {
+    // agy -i "prompt" = execute prompt then stay interactive (needs TTY/PTY)
+    // agy --conversation <id> = resume
+    let mut args = Vec::new();
+    if let Some(session_id) = resume_session {
+        args.extend(["--conversation".to_string(), session_id.to_string()]);
+    }
+    if !extra_args.iter().any(|a| a == "--dangerously-skip-permissions") {
+        args.push("--dangerously-skip-permissions".to_string());
+    }
+    args.extend(extra_args.iter().cloned());
+    // Use -i (prompt-interactive) to inject prompt and keep session alive
+    if let Some(p) = prompt {
+        args.extend(["-i".to_string(), p.to_string()]);
+    }
+    args
+}
+
 /// Whether the provider accepts prompt as a positional arg in interactive TUI mode.
 /// If false, prompt must be injected via bracketed paste after TUI is ready.
 pub fn accepts_positional_prompt(provider: ProviderKind) -> bool {
-    matches!(provider, ProviderKind::Codex | ProviderKind::Gemini | ProviderKind::Kiro)
+    matches!(provider, ProviderKind::Codex | ProviderKind::Gemini | ProviderKind::Kiro | ProviderKind::Agy)
 }
 
 /// Resolve the session file path to tail for completion detection.
@@ -171,6 +194,7 @@ pub fn resolve_session_path(provider: ProviderKind, cwd: &Path) -> Option<PathBu
         ProviderKind::Grok => resolve_grok_session_dir(cwd),
         ProviderKind::Copilot => resolve_copilot_session_dir(),
         ProviderKind::Kiro => resolve_kiro_session_dir(),
+        ProviderKind::Agy => resolve_agy_session_dir(),
         _ => None,
     }
 }
@@ -251,6 +275,19 @@ fn resolve_kiro_session_dir() -> Option<PathBuf> {
     let parent = std::path::Path::new(&path).parent()?;
     if parent.is_dir() {
         Some(parent.to_path_buf())
+    } else {
+        None
+    }
+}
+
+fn resolve_agy_session_dir() -> Option<PathBuf> {
+    let home = std::env::var("HOME").ok()?;
+    let dir = PathBuf::from(home)
+        .join(".gemini")
+        .join("antigravity-cli")
+        .join("conversations");
+    if dir.is_dir() {
+        Some(dir)
     } else {
         None
     }
@@ -339,6 +376,15 @@ pub fn extract_session_id(provider: ProviderKind, session_path: &Path) -> Option
         ProviderKind::Kiro => {
             // Kiro session ID comes from sqlite; for file-based, use kiro_session module
             None
+        }
+        ProviderKind::Agy => {
+            // Conversation file: <uuid>.pb → extract uuid from filename
+            let name = session_path.file_stem()?.to_string_lossy().to_string();
+            if name.len() >= 32 && name.contains('-') {
+                Some(name)
+            } else {
+                None
+            }
         }
         _ => None,
     }

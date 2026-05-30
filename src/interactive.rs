@@ -239,7 +239,11 @@ fn wait_and_tail(
         let current_change = pty_child.last_change_us.load(Ordering::Relaxed);
         if current_change != last_pty_change {
             last_pty_change = current_change;
-            // Don't reset completion_candidate — PTY noise shouldn't block completion
+            // For agy (no session file), PTY activity IS the activity signal
+            if config.provider == ProviderKind::Agy {
+                last_activity.store(epoch_ms(), Ordering::Relaxed);
+                completion_candidate_since = None;
+            }
         }
 
         // Discover session file
@@ -286,7 +290,14 @@ fn wait_and_tail(
         // Completion detection: session file stable + has assistant response
         let now = epoch_ms();
         let file_idle_ms = now.saturating_sub(last_activity.load(Ordering::Relaxed));
-        if file_idle_ms >= COMPLETION_QUIESCE_MS && last_assistant.is_some() {
+        // Agy uses protobuf (no JSONL tail) — detect completion via PTY quiescence alone
+        let has_response = if config.provider == ProviderKind::Agy {
+            // For agy, consider "has response" if PTY has been active then went quiet
+            last_pty_change > 0 && file_idle_ms >= COMPLETION_QUIESCE_MS
+        } else {
+            last_assistant.is_some()
+        };
+        if file_idle_ms >= COMPLETION_QUIESCE_MS && has_response {
             match completion_candidate_since {
                 None => completion_candidate_since = Some(now),
                 Some(since) if now.saturating_sub(since) >= COMPLETION_QUIESCE_MS => {
@@ -435,6 +446,7 @@ fn normalize_provider_line(
         ProviderKind::Codex => normalize_codex(value),
         ProviderKind::Grok => normalize_grok(value),
         ProviderKind::Kiro => normalize_kiro(value),
+        ProviderKind::Agy => None, // Agy uses protobuf, not JSONL — output captured from PTY directly
         _ => None,
     }
 }
@@ -689,6 +701,14 @@ fn emit_footer(
     before_files: &std::collections::HashSet<PathBuf>,
     started_at_ms: u64,
 ) {
+    // Agy: read session ID from last_conversations.json (cwd → uuid mapping)
+    if config.provider == ProviderKind::Agy {
+        if let Some(id) = resolve_agy_conversation_id(&config.cwd) {
+            interactive_providers::emit_session_footer(config.provider, &id);
+        }
+        return;
+    }
+
     let after_files = interactive_providers::list_session_files(config.provider, &config.cwd);
     let new_files: Vec<_> = after_files.difference(before_files).collect();
 
@@ -705,6 +725,22 @@ fn emit_footer(
     if let Some(id) = session_id {
         interactive_providers::emit_session_footer(config.provider, &id);
     }
+}
+
+/// Read agy conversation ID for a cwd from ~/.gemini/antigravity-cli/cache/last_conversations.json
+fn resolve_agy_conversation_id(cwd: &std::path::Path) -> Option<String> {
+    let home = std::env::var("HOME").ok()?;
+    let path = std::path::PathBuf::from(home)
+        .join(".gemini")
+        .join("antigravity-cli")
+        .join("cache")
+        .join("last_conversations.json");
+    let content = std::fs::read_to_string(&path).ok()?;
+    let map: serde_json::Value = serde_json::from_str(&content).ok()?;
+    let cwd_str = cwd.to_string_lossy();
+    map.get(cwd_str.as_ref())
+        .and_then(|v| v.as_str())
+        .map(String::from)
 }
 
 fn emit_error(run_id: &str, config: &InteractiveConfig, message: &str, code: i32) {

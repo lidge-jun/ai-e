@@ -53,10 +53,14 @@ pub fn main_entry() {
     }
 
     if provider.is_headless_provider() {
-        // --headless / -p explicitly requests the legacy one-shot path (deprecated)
-        if has_headless_flag(&raw_args) {
+        // --headless / -p explicitly requests the legacy one-shot path (deprecated for most providers)
+        // Agy: headless is still the default (TUI output is not parseable)
+        let use_headless = has_headless_flag(&raw_args)
+            || (provider == ProviderKind::Agy && !has_interactive_flag(&raw_args));
+        if use_headless {
             let raw_args_filtered = remove_flag(&raw_args, "--headless");
             let raw_args_filtered = remove_flag(&raw_args_filtered, "-p");
+            let raw_args_filtered = remove_flag(&raw_args_filtered, "--interactive");
             let exit_code = headless::run_provider(provider, raw_args_filtered);
             std::process::exit(exit_code);
         }
@@ -149,7 +153,8 @@ fn run_provider(
         | ProviderKind::Gemini
         | ProviderKind::Grok
         | ProviderKind::Copilot
-        | ProviderKind::Kiro => {
+        | ProviderKind::Kiro
+        | ProviderKind::Agy => {
             emit_error(
                 config,
                 &providers::unsupported_provider_message(provider),
@@ -729,6 +734,10 @@ fn has_headless_flag(args: &[std::ffi::OsString]) -> bool {
         let s = arg.to_str().unwrap_or("");
         s == "--headless" || s == "-p"
     })
+}
+
+fn has_interactive_flag(args: &[std::ffi::OsString]) -> bool {
+    args.iter().any(|arg| arg.to_str() == Some("--interactive"))
 }
 
 fn remove_flag(args: &[std::ffi::OsString], flag: &str) -> Vec<std::ffi::OsString> {

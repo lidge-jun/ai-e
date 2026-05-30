@@ -11,6 +11,7 @@ pub enum ProviderKind {
     Grok,
     Copilot,
     Kiro,
+    Agy,
 }
 
 impl ProviderKind {
@@ -22,6 +23,7 @@ impl ProviderKind {
             "grok" => Some(Self::Grok),
             "copilot" | "github-copilot" => Some(Self::Copilot),
             "kiro" | "kiro-code" => Some(Self::Kiro),
+            "agy" | "antigravity" => Some(Self::Agy),
             _ => None,
         }
     }
@@ -34,6 +36,7 @@ impl ProviderKind {
             Self::Grok => "grok",
             Self::Copilot => "copilot",
             Self::Kiro => "kiro",
+            Self::Agy => "agy",
         }
     }
 
@@ -45,6 +48,7 @@ impl ProviderKind {
             Self::Grok => "Grok CLI",
             Self::Copilot => "GitHub Copilot CLI",
             Self::Kiro => "Kiro CLI",
+            Self::Agy => "Antigravity CLI",
         }
     }
 
@@ -56,6 +60,7 @@ impl ProviderKind {
             Self::Grok => "grok",
             Self::Copilot => "copilot",
             Self::Kiro => "kiro-cli",
+            Self::Agy => "agy",
         }
     }
 
@@ -67,6 +72,7 @@ impl ProviderKind {
             Self::Grok => &["AI_E_GROK_BIN", "GROK_BIN"],
             Self::Copilot => &["AI_E_COPILOT_BIN", "COPILOT_BIN"],
             Self::Kiro => &["AI_E_KIRO_BIN", "KIRO_BIN", "KIRO_CLI_BIN"],
+            Self::Agy => &["AI_E_AGY_BIN", "AGY_BIN"],
         }
     }
 
@@ -84,21 +90,21 @@ impl ProviderKind {
     pub fn is_pty_provider(self) -> bool {
         matches!(
             self,
-            Self::ClaudeCode | Self::Codex | Self::Gemini | Self::Grok | Self::Copilot
+            Self::ClaudeCode | Self::Codex | Self::Gemini | Self::Grok | Self::Copilot | Self::Agy
         )
     }
 
     pub fn is_headless_provider(self) -> bool {
         matches!(
             self,
-            Self::Codex | Self::Gemini | Self::Grok | Self::Copilot | Self::Kiro
+            Self::Codex | Self::Gemini | Self::Grok | Self::Copilot | Self::Kiro | Self::Agy
         )
     }
 
     pub fn supports_interactive(self) -> bool {
         matches!(
             self,
-            Self::Codex | Self::Gemini | Self::Grok | Self::Copilot | Self::Kiro
+            Self::Codex | Self::Gemini | Self::Grok | Self::Copilot | Self::Kiro | Self::Agy
         )
     }
 }
