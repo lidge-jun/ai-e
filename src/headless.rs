@@ -1,14 +1,15 @@
+use std::collections::HashSet;
 use std::ffi::OsString;
 use std::io::{Read, Write};
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 use portable_pty::{CommandBuilder, PtySize, native_pty_system};
 
 use crate::print_mode;
-use crate::providers::ProviderKind;
+use crate::providers::{kiro_session, ProviderKind};
 use crate::sanitize;
 
 const DEFAULT_TIMEOUT_MS: u64 = 600_000;
@@ -22,6 +23,7 @@ pub struct HeadlessOptions {
     pub cwd: Option<PathBuf>,
     pub timeout_ms: u64,
     pub extra_args: Vec<String>,
+    pub show_session_footer: bool,
 }
 
 pub fn run_provider(provider: ProviderKind, raw_args: Vec<OsString>) -> i32 {
@@ -50,13 +52,49 @@ pub fn run_provider(provider: ProviderKind, raw_args: Vec<OsString>) -> i32 {
     };
 
     let provider_args = build_provider_args(provider, &options, &prompt);
-    spawn_pty_with_timeout(
+    let capture = if matches!(provider, ProviderKind::Kiro) {
+        Some(Arc::new(Mutex::new(Vec::new())))
+    } else {
+        None
+    };
+
+    let cwd = options.cwd.clone();
+    let show_session_footer = options.show_session_footer;
+    let resume_session_id = extract_resume_session_id(&options.extra_args);
+    let before_ids = if matches!(provider, ProviderKind::Kiro) && resume_session_id.is_none() {
+        cwd.as_deref()
+            .map(|path| {
+                kiro_session::list_conversation_ids_for_cwd(
+                    path,
+                    &kiro_session::resolve_kiro_data_path(),
+                )
+            })
+            .unwrap_or_default()
+    } else {
+        HashSet::new()
+    };
+    let started_at_ms = epoch_ms().saturating_sub(1_000);
+
+    let code = spawn_pty_with_timeout(
         provider,
         &options.provider_bin,
         &provider_args,
-        options.cwd.as_deref(),
+        cwd.as_deref(),
         options.timeout_ms,
-    )
+        capture.clone(),
+    );
+
+    if matches!(provider, ProviderKind::Kiro) && show_session_footer {
+        emit_kiro_session_footer(
+            cwd.as_deref(),
+            resume_session_id.as_deref(),
+            &before_ids,
+            started_at_ms,
+            capture.as_ref(),
+        );
+    }
+
+    code
 }
 
 pub fn parse_headless_args(
@@ -79,6 +117,7 @@ pub fn parse_headless_args(
     let mut timeout_ms = DEFAULT_TIMEOUT_MS;
     let mut extra_args = Vec::new();
     let mut prompt_parts = Vec::new();
+    let mut show_session_footer = true;
 
     let mut index = 0;
     while index < args.len() {
@@ -171,9 +210,12 @@ pub fn parse_headless_args(
             | "--include-partial-messages"
             | "--include-hook-events"
             | "--replay-user-messages"
-            | "--no-session-footer"
+            |             "--no-session-footer"
             | "--auto-accept-workspace-trust"
             | "--no-auto-accept-workspace-trust" => {
+                if flag == "--no-session-footer" {
+                    show_session_footer = false;
+                }
                 index += 1;
             }
             "--" => {
@@ -214,6 +256,7 @@ pub fn parse_headless_args(
         cwd,
         timeout_ms,
         extra_args,
+        show_session_footer,
     })
 }
 
@@ -228,6 +271,7 @@ pub fn build_provider_args(
         ProviderKind::Gemini => build_gemini_args(options, prompt),
         ProviderKind::Grok => build_grok_args(options, prompt),
         ProviderKind::Copilot => build_copilot_args(options, prompt),
+        ProviderKind::Kiro => build_kiro_args(options, prompt),
     }
 }
 
@@ -334,12 +378,87 @@ fn build_copilot_args(options: &HeadlessOptions, prompt: &str) -> Vec<String> {
     args
 }
 
+fn build_kiro_args(options: &HeadlessOptions, prompt: &str) -> Vec<String> {
+    let (filtered_extra, resume_id) = split_kiro_resume_args(&options.extra_args);
+    let mut args = vec!["chat".to_string(), "--no-interactive".to_string()];
+    if let Some(model) = &options.model {
+        args.extend(["--model".to_string(), model.clone()]);
+    }
+    if let Some(session_id) = resume_id {
+        args.extend(["--resume-id".to_string(), session_id]);
+    }
+    if !contains_any(&filtered_extra, &["--trust-all-tools", "--trust-tools"]) {
+        args.push("--trust-all-tools".to_string());
+    }
+    args.extend(filtered_extra);
+    args.push(prompt.to_string());
+    args
+}
+
+fn split_kiro_resume_args(extra_args: &[String]) -> (Vec<String>, Option<String>) {
+    let mut filtered = Vec::new();
+    let mut resume_id = None;
+    let mut index = 0;
+    while index < extra_args.len() {
+        match extra_args[index].as_str() {
+            "--resume" | "--resume-id" => {
+                resume_id = extra_args.get(index + 1).cloned();
+                index += 2;
+            }
+            _ => {
+                filtered.push(extra_args[index].clone());
+                index += 1;
+            }
+        }
+    }
+    (filtered, resume_id)
+}
+
+fn extract_resume_session_id(extra_args: &[String]) -> Option<String> {
+    split_kiro_resume_args(extra_args).1
+}
+
+fn emit_kiro_session_footer(
+    cwd: Option<&std::path::Path>,
+    resume_session_id: Option<&str>,
+    before_ids: &HashSet<String>,
+    started_at_ms: u64,
+    capture: Option<&Arc<Mutex<Vec<u8>>>>,
+) {
+    if let Some(session_id) = resume_session_id.filter(|id| !id.trim().is_empty()) {
+        kiro_session::emit_session_footer(session_id);
+        return;
+    }
+
+    let captured = capture
+        .and_then(|buf| buf.lock().ok())
+        .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
+        .unwrap_or_default();
+
+    if let Some(session_id) = kiro_session::parse_session_id_from_stdout(&captured) {
+        kiro_session::emit_session_footer(&session_id);
+        return;
+    }
+
+    let Some(cwd) = cwd else {
+        return;
+    };
+
+    let data_path = kiro_session::resolve_kiro_data_path();
+    if let Some(session_id) =
+        kiro_session::resolve_session_id_after_spawn(cwd, before_ids, started_at_ms, &data_path)
+    {
+        kiro_session::emit_session_footer(&session_id);
+    }
+}
+
 fn spawn_pty_with_timeout(
     provider: ProviderKind,
     bin: &str,
     args: &[String],
     cwd: Option<&std::path::Path>,
     timeout_ms: u64,
+    capture: Option<Arc<Mutex<Vec<u8>>>>,
 ) -> i32 {
     let pty_system = native_pty_system();
     let pair = match pty_system.openpty(PtySize {
@@ -397,6 +516,7 @@ fn spawn_pty_with_timeout(
     let reader_stop = Arc::clone(&stop);
     let reader_activity = Arc::clone(&last_activity_ms);
     let provider_id = provider.id().to_string();
+    let reader_capture = capture.clone();
     let reader_handle = std::thread::spawn(move || {
         let mut buf = [0u8; 8192];
         let mut stdout = std::io::stdout().lock();
@@ -406,6 +526,11 @@ fn spawn_pty_with_timeout(
                 Ok(0) => break,
                 Ok(n) => {
                     reader_activity.store(epoch_ms(), Ordering::Relaxed);
+                    if let Some(capture_buf) = reader_capture.as_ref() {
+                        if let Ok(mut guard) = capture_buf.lock() {
+                            guard.extend_from_slice(&buf[..n]);
+                        }
+                    }
                     if let Err(e) =
                         write_projected_pty_chunk(provider, &buf[..n], &mut line_buf, &mut stdout)
                     {
@@ -453,7 +578,9 @@ fn spawn_pty_with_timeout(
 fn validate_output_format(provider: ProviderKind, value: &str) -> Result<(), String> {
     let allowed = match provider {
         ProviderKind::Codex | ProviderKind::Copilot => &["text", "json", "stream-json"][..],
-        ProviderKind::Gemini | ProviderKind::Grok => &["text", "json", "stream-json"][..],
+        ProviderKind::Gemini | ProviderKind::Grok | ProviderKind::Kiro => {
+            &["text", "json", "stream-json"][..]
+        }
         ProviderKind::ClaudeCode => unreachable!("Claude Code uses print_mode parser"),
     };
     if allowed.contains(&value) {
@@ -763,6 +890,43 @@ mod tests {
             1
         );
         assert!(args.contains(&"on".to_string()));
+    }
+
+    #[test]
+    fn builds_kiro_chat_no_interactive_shape() {
+        let options = parse_headless_args(
+            ProviderKind::Kiro,
+            os_args(&["--model", "auto", "hello"]),
+            None,
+        )
+        .unwrap();
+        let args = build_provider_args(ProviderKind::Kiro, &options, &options.prompt);
+        assert_eq!(args[0], "chat");
+        assert_eq!(args[1], "--no-interactive");
+        assert!(args.contains(&"--model".to_string()));
+        assert!(args.contains(&"auto".to_string()));
+        assert!(args.contains(&"--trust-all-tools".to_string()));
+        assert_eq!(args.last().map(String::as_str), Some("hello"));
+    }
+
+    #[test]
+    fn maps_ai_e_resume_to_kiro_resume_id() {
+        let options = parse_headless_args(
+            ProviderKind::Kiro,
+            os_args(&[
+                "--resume",
+                "79eee8a5-7c00-4cd9-8385-c534a2f8b814",
+                "follow up",
+            ]),
+            None,
+        )
+        .unwrap();
+        let args = build_provider_args(ProviderKind::Kiro, &options, &options.prompt);
+        assert!(args.windows(2).any(|pair| {
+            pair[0] == "--resume-id" && pair[1] == "79eee8a5-7c00-4cd9-8385-c534a2f8b814"
+        }));
+        assert!(!args.iter().any(|arg| arg == "--resume"));
+        assert_eq!(args.last().map(String::as_str), Some("follow up"));
     }
 
     #[test]

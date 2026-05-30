@@ -134,7 +134,8 @@ fn run_provider(
 ) -> i32 {
     match provider {
         ProviderKind::ClaudeCode => run(config, prompt_override),
-        ProviderKind::Codex | ProviderKind::Gemini | ProviderKind::Grok | ProviderKind::Copilot => {
+        ProviderKind::Codex | ProviderKind::Gemini | ProviderKind::Grok | ProviderKind::Copilot
+        | ProviderKind::Kiro => {
             emit_error(
                 config,
                 &providers::unsupported_provider_message(provider),
@@ -177,6 +178,7 @@ Providers:
   gemini       PTY prompt-mode adapter using gemini --prompt.
   grok         PTY prompt-mode adapter using grok --single.
   copilot      PTY prompt-mode adapter using copilot --prompt.
+  kiro         PTY prompt-mode adapter using kiro-cli chat --no-interactive.
 
 Default provider:
   If the provider is omitted, ai-e currently defaults to claude for bootstrap
@@ -184,7 +186,7 @@ Default provider:
 
 Execution modes:
   claude uses the interactive PTY path copied from claude-e.
-  codex/gemini/grok/copilot use native prompt-mode CLI surfaces inside PTY.
+  codex/gemini/grok/copilot/kiro use native prompt-mode CLI surfaces inside PTY.
 
 Options:
   -p, --print                              Print-compatible mode marker
@@ -234,6 +236,8 @@ Examples:
   ai-e gemini --model gemini-2.5-pro \"summarize this repo\"
   ai-e grok --model auto \"summarize this repo\"
   ai-e copilot --model gpt-5-mini \"summarize this repo\"
+  ai-e kiro --model auto \"summarize this repo\"
+  ai-e kiro --resume 79eee8a5-7c00-4cd9-8385-c534a2f8b814 \"continue\"
 "
     );
 }

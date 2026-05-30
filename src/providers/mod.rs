@@ -1,6 +1,7 @@
 use std::ffi::OsString;
 
 pub mod claude_code;
+pub mod kiro_session;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProviderKind {
@@ -9,6 +10,7 @@ pub enum ProviderKind {
     Gemini,
     Grok,
     Copilot,
+    Kiro,
 }
 
 impl ProviderKind {
@@ -19,6 +21,7 @@ impl ProviderKind {
             "gemini" => Some(Self::Gemini),
             "grok" => Some(Self::Grok),
             "copilot" | "github-copilot" => Some(Self::Copilot),
+            "kiro" | "kiro-code" => Some(Self::Kiro),
             _ => None,
         }
     }
@@ -30,6 +33,7 @@ impl ProviderKind {
             Self::Gemini => "gemini",
             Self::Grok => "grok",
             Self::Copilot => "copilot",
+            Self::Kiro => "kiro",
         }
     }
 
@@ -40,6 +44,7 @@ impl ProviderKind {
             Self::Gemini => "Gemini CLI",
             Self::Grok => "Grok CLI",
             Self::Copilot => "GitHub Copilot CLI",
+            Self::Kiro => "Kiro CLI",
         }
     }
 
@@ -50,6 +55,7 @@ impl ProviderKind {
             Self::Gemini => "gemini",
             Self::Grok => "grok",
             Self::Copilot => "copilot",
+            Self::Kiro => "kiro-cli",
         }
     }
 
@@ -60,6 +66,7 @@ impl ProviderKind {
             Self::Gemini => &["AI_E_GEMINI_BIN", "GEMINI_BIN"],
             Self::Grok => &["AI_E_GROK_BIN", "GROK_BIN"],
             Self::Copilot => &["AI_E_COPILOT_BIN", "COPILOT_BIN"],
+            Self::Kiro => &["AI_E_KIRO_BIN", "KIRO_BIN", "KIRO_CLI_BIN"],
         }
     }
 
@@ -77,7 +84,7 @@ impl ProviderKind {
     pub fn is_pty_provider(self) -> bool {
         matches!(
             self,
-            Self::ClaudeCode | Self::Codex | Self::Gemini | Self::Grok | Self::Copilot
+            Self::ClaudeCode | Self::Codex | Self::Gemini | Self::Grok | Self::Copilot | Self::Kiro
         )
     }
 }
@@ -125,6 +132,11 @@ mod tests {
     }
 
     #[test]
+    fn parses_kiro_alias() {
+        assert_eq!(ProviderKind::parse("kiro-code"), Some(ProviderKind::Kiro));
+    }
+
+    #[test]
     fn all_supported_providers_are_pty_backed() {
         for provider in [
             ProviderKind::ClaudeCode,
@@ -132,6 +144,7 @@ mod tests {
             ProviderKind::Gemini,
             ProviderKind::Grok,
             ProviderKind::Copilot,
+            ProviderKind::Kiro,
         ] {
             assert!(
                 provider.is_pty_provider(),

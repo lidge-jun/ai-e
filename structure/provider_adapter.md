@@ -28,6 +28,7 @@ Required responsibilities:
 | Gemini CLI | PTY prompt-mode | `gemini --prompt` | `--skip-trust --approval-mode yolo` plus home-root `--include-directories` |
 | Grok CLI | PTY prompt-mode | `grok --single` | `--no-alt-screen --always-approve --permission-mode bypassPermissions` |
 | Copilot CLI | PTY prompt-mode | `copilot --prompt` | `--allow-all --stream off` |
+| Kiro CLI | PTY prompt-mode | `kiro-cli chat --no-interactive` | `--trust-all-tools`; resume via `--resume-id` |
 
 AGY/Antigravity is excluded from the provider map. Do not add `ProviderKind::Antigravity`,
 `ai-e antigravity`, or `agy` aliases until a non-TUI prompt contract exists.
