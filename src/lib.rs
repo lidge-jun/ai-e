@@ -134,7 +134,10 @@ fn run_provider(
 ) -> i32 {
     match provider {
         ProviderKind::ClaudeCode => run(config, prompt_override),
-        ProviderKind::Codex | ProviderKind::Gemini | ProviderKind::Grok | ProviderKind::Copilot
+        ProviderKind::Codex
+        | ProviderKind::Gemini
+        | ProviderKind::Grok
+        | ProviderKind::Copilot
         | ProviderKind::Kiro => {
             emit_error(
                 config,

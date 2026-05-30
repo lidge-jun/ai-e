@@ -21,7 +21,9 @@ pub fn resolve_kiro_data_path() -> PathBuf {
 
     if cfg!(target_os = "windows") {
         if let Ok(app_data) = std::env::var("APPDATA") {
-            return PathBuf::from(app_data).join("kiro-cli").join("data.sqlite3");
+            return PathBuf::from(app_data)
+                .join("kiro-cli")
+                .join("data.sqlite3");
         }
     }
 
@@ -62,9 +64,7 @@ pub fn list_conversation_ids_for_cwd(cwd: &Path, data_path: &Path) -> HashSet<St
     };
 
     let placeholders = keys.iter().map(|_| "?").collect::<Vec<_>>().join(",");
-    let sql = format!(
-        "SELECT conversation_id FROM conversations_v2 WHERE key IN ({placeholders})"
-    );
+    let sql = format!("SELECT conversation_id FROM conversations_v2 WHERE key IN ({placeholders})");
 
     let mut stmt = match conn.prepare(&sql) {
         Ok(stmt) => stmt,
@@ -207,7 +207,10 @@ fn parse_uuid_after_marker(line: &str, marker: &str) -> Option<String> {
     let marker_lower = marker.to_ascii_lowercase();
     let idx = lower.find(&marker_lower)?;
     let tail = line[idx + marker.len()..].trim();
-    let token = tail.split_whitespace().next()?.trim_matches(|c| c == '.' || c == ',');
+    let token = tail
+        .split_whitespace()
+        .next()?
+        .trim_matches(|c| c == '.' || c == ',');
     is_uuid(token).then(|| token.to_string())
 }
 

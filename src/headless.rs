@@ -2,14 +2,14 @@ use std::collections::HashSet;
 use std::ffi::OsString;
 use std::io::{Read, Write};
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use portable_pty::{CommandBuilder, PtySize, native_pty_system};
 
 use crate::print_mode;
-use crate::providers::{kiro_session, ProviderKind};
+use crate::providers::{ProviderKind, kiro_session};
 use crate::sanitize;
 
 const DEFAULT_TIMEOUT_MS: u64 = 600_000;
@@ -221,7 +221,7 @@ pub fn parse_headless_args(
             | "--include-partial-messages"
             | "--include-hook-events"
             | "--replay-user-messages"
-            |             "--no-session-footer"
+            | "--no-session-footer"
             | "--auto-accept-workspace-trust"
             | "--no-auto-accept-workspace-trust" => {
                 if flag == "--no-session-footer" {
