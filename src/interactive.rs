@@ -822,7 +822,7 @@ fn run_kiro_pipe(
 
     let mut last_assistant: Option<serde_json::Value> = None;
     let mut stdout_handle = child.stdout.take();
-    let active_tools = Arc::new(AtomicUsize::new(0));
+    let _active_tools = Arc::new(AtomicUsize::new(0));
     let mut out = std::io::stdout().lock();
 
     // Read stdout line by line, normalize, emit

@@ -8,21 +8,26 @@
 `ai-e` is a modular PTY exec layer for AI CLIs.
 
 The goal is one installable command that can drive Claude Code, Codex, Gemini,
-Grok, and future interactive agent CLIs through the same process contract:
+Grok, Antigravity (agy), and future interactive agent CLIs through the same
+process contract:
 
 ```bash
 npm install -g @bitkyc08/ai-e
 
 ai-e claude "your prompt here"
-ai-e claude --output-format json "summarize this commit" < commit.diff
-ai-e claude --output-format stream-json "audit src/" --verbose | jq .
+ai-e codex --model gpt-5-mini "summarize this repo"
+ai-e grok --model auto "explain quicksort"
+ai-e agy "respond with hello world"
+ai-e kiro --model auto "summarize this repo"
 ```
 
-The runnable provider paths now use PTY supervision. Claude uses the copied
-`claude-e` interactive lifecycle; Codex, Gemini, Grok, and Copilot use their
-native prompt submission modes while the child process still runs inside a PTY.
-AGY/Antigravity is intentionally excluded because the installed `agy` command
-opens a full TUI and does not expose the same prompt-mode contract.
+Providers run in two modes:
+
+- **Interactive (default for codex/grok)**: Spawn the provider's TUI in a PTY,
+  inject prompt via bracketed paste, tail the session file for structured JSONL
+  output, detect completion via quiescence, and emit a session footer for resume.
+- **Headless**: One-shot prompt execution via native CLI flags (legacy `-p` path,
+  still default for agy/kiro).
 
 ## Why This Exists
 
@@ -43,13 +48,15 @@ stable result object.
 
 ## Provider Status
 
-| Provider | Command | Status | Notes |
+| Provider | Command | Mode | Notes |
 |---|---|---|---|
-| Claude Code | `ai-e claude ...` | PTY-backed | Copied from the hardened `claude-e` runtime as the first provider. |
-| Codex CLI | `ai-e codex ...` | PTY prompt-mode | Uses `codex exec`; tests pin the `gpt-5-mini` argument shape. |
-| Gemini CLI | `ai-e gemini ...` | PTY prompt-mode | Uses `gemini --prompt`. |
-| Grok CLI | `ai-e grok ...` | PTY prompt-mode | Uses `grok --single`. |
-| Copilot CLI | `ai-e copilot ...` | PTY prompt-mode | Uses `copilot --prompt`; also documentable through `gh copilot --`. |
+| Claude Code | `ai-e claude ...` | PTY interactive | Copied from the hardened `claude-e` runtime. Hook-based completion. |
+| Codex CLI | `ai-e codex ...` | Interactive (default) | TUI in PTY, session file tail, resume via session ID. |
+| Gemini CLI | `ai-e gemini ...` | Interactive | Uses `gemini` TUI with session JSONL tail. |
+| Grok CLI | `ai-e grok ...` | Interactive (default) | TUI in PTY, `chat_history.jsonl` tail, auto-completion. |
+| Copilot CLI | `ai-e copilot ...` | Interactive | Uses `copilot` TUI with sqlite session store. |
+| Kiro CLI | `ai-e kiro ...` | Pipe (headless) | `kiro-cli chat --no-interactive`; PTY hangs for kiro. |
+| Antigravity | `ai-e agy ...` | Headless (default) | `agy -p`; interactive opt-in via `--interactive`. |
 
 ## Install
 
@@ -159,6 +166,8 @@ Provider binary overrides:
 | Gemini | `AI_E_GEMINI_BIN`, then `GEMINI_BIN`, then `gemini` |
 | Grok | `AI_E_GROK_BIN`, then `GROK_BIN`, then `grok` |
 | Copilot | `AI_E_COPILOT_BIN`, then `COPILOT_BIN`, then `copilot` |
+| Kiro | `AI_E_KIRO_BIN`, then `KIRO_BIN`, then `kiro-cli` |
+| Antigravity | `AI_E_AGY_BIN`, then `AGY_BIN`, then `agy` |
 
 `--provider-bin <path>` overrides the binary for a single run.
 
@@ -269,13 +278,16 @@ bash scripts/smoke.sh
 
 ## Repository Map
 
-- `src/lib.rs` - CLI entry, runtime loop, Claude provider dispatch.
-- `src/providers/` - provider registry and adapter metadata.
+- `src/lib.rs` - CLI entry, routing (interactive vs headless), Claude provider dispatch.
+- `src/interactive.rs` - Interactive bypass engine: PTY spawn, paste inject, session file tail, normalize, completion detect.
+- `src/interactive_providers.rs` - Per-provider TUI args, session path resolution, session ID extraction.
+- `src/headless.rs` - Headless one-shot execution for all providers.
+- `src/providers/` - Provider registry, adapter metadata, kiro session capture.
 - `src/child.rs` - PTY child process wrapper.
-- `src/hook.rs` - Claude hook relay used by the current provider.
-- `src/transcript.rs` / `src/normalize.rs` - transcript replay and stream-json normalization.
-- `structure/` - command surface, runtime contract, adapter architecture.
-- `devlog/_plan/` - active migration and provider expansion plans.
+- `src/hook.rs` - Claude hook relay used by the Claude provider.
+- `src/transcript.rs` / `src/normalize.rs` - Claude transcript replay and stream-json normalization.
+- `structure/` - Command surface, runtime contract, adapter architecture.
+- `devlog/_plan/` - Active migration and provider expansion plans.
 
 ## cli-jaw Goal
 
@@ -283,13 +295,15 @@ The target integration is:
 
 ```text
 cli-jaw
-  -> ai-e claude ...
-  -> ai-e codex ...
-  -> ai-e gemini ...
-  -> ai-e grok ...
-  -> ai-e copilot ...
+  -> ai-e claude ...   (PTY interactive, hook-based)
+  -> ai-e codex ...    (interactive, session file tail + resume)
+  -> ai-e grok ...     (interactive, session file tail + resume)
+  -> ai-e kiro ...     (pipe, session footer + resume)
+  -> ai-e agy ...      (headless -p, session footer + resume)
+  -> ai-e gemini ...   (interactive)
+  -> ai-e copilot ...  (interactive)
 ```
 
-cli-jaw should eventually resolve one external runtime (`ai-e`) and select
-providers through explicit command arguments instead of owning separate wrapper
-implementations for every interactive AI CLI.
+cli-jaw resolves one external runtime (`ai-e`) and selects providers through
+explicit command arguments. Resume is supported for claude, codex, grok, kiro,
+and agy via session ID persistence.
