@@ -75,14 +75,25 @@ pub fn run_provider(provider: ProviderKind, raw_args: Vec<OsString>) -> i32 {
     };
     let started_at_ms = epoch_ms().saturating_sub(1_000);
 
-    let code = spawn_pty_with_timeout(
-        provider,
-        &options.provider_bin,
-        &provider_args,
-        cwd.as_deref(),
-        options.timeout_ms,
-        capture.clone(),
-    );
+    let code = if matches!(provider, ProviderKind::Kiro) {
+        spawn_pipe_with_timeout(
+            provider,
+            &options.provider_bin,
+            &provider_args,
+            cwd.as_deref(),
+            options.timeout_ms,
+            capture.clone(),
+        )
+    } else {
+        spawn_pty_with_timeout(
+            provider,
+            &options.provider_bin,
+            &provider_args,
+            cwd.as_deref(),
+            options.timeout_ms,
+            capture.clone(),
+        )
+    };
 
     if matches!(provider, ProviderKind::Kiro) && show_session_footer {
         emit_kiro_session_footer(
@@ -572,6 +583,116 @@ fn spawn_pty_with_timeout(
 
     stop.store(true, Ordering::Relaxed);
     let _ = reader_handle.join();
+    code
+}
+
+/// Kiro `chat --no-interactive` hangs when wrapped in a PTY (detects TTY). Use pipes.
+fn spawn_pipe_with_timeout(
+    provider: ProviderKind,
+    bin: &str,
+    args: &[String],
+    cwd: Option<&std::path::Path>,
+    timeout_ms: u64,
+    capture: Option<Arc<Mutex<Vec<u8>>>>,
+) -> i32 {
+    let mut command = std::process::Command::new(bin);
+    command.args(args);
+    if let Some(cwd) = cwd {
+        command.current_dir(cwd);
+    }
+    command.stdin(std::process::Stdio::null());
+    command.stdout(std::process::Stdio::piped());
+    command.stderr(std::process::Stdio::piped());
+
+    let mut child = match command.spawn() {
+        Ok(child) => child,
+        Err(e) => {
+            eprintln!(
+                "ai-e: failed to spawn {} provider via {bin}: {e}",
+                provider.id()
+            );
+            return 4;
+        }
+    };
+
+    let stop = Arc::new(AtomicBool::new(false));
+    let stdout_handle = child.stdout.take().map(|mut out| {
+        let reader_stop = Arc::clone(&stop);
+        let reader_capture = capture.clone();
+        std::thread::spawn(move || {
+            let mut buf = [0u8; 8192];
+            let mut stdout = std::io::stdout().lock();
+            while !reader_stop.load(Ordering::Relaxed) {
+                match out.read(&mut buf) {
+                    Ok(0) => break,
+                    Ok(n) => {
+                        if let Some(capture_buf) = reader_capture.as_ref() {
+                            if let Ok(mut guard) = capture_buf.lock() {
+                                guard.extend_from_slice(&buf[..n]);
+                            }
+                        }
+                        let _ = stdout.write_all(&buf[..n]);
+                        let _ = stdout.flush();
+                    }
+                    Err(e) => {
+                        log::debug!("{} pipe stdout read error: {e}", provider.id());
+                        break;
+                    }
+                }
+            }
+        })
+    });
+    let stderr_handle = child.stderr.take().map(|mut err| {
+        let reader_stop = Arc::clone(&stop);
+        std::thread::spawn(move || {
+            let mut buf = [0u8; 8192];
+            let mut stderr = std::io::stderr().lock();
+            while !reader_stop.load(Ordering::Relaxed) {
+                match err.read(&mut buf) {
+                    Ok(0) => break,
+                    Ok(n) => {
+                        let _ = stderr.write_all(&buf[..n]);
+                        let _ = stderr.flush();
+                    }
+                    Err(e) => {
+                        log::debug!("{} pipe stderr read error: {e}", provider.id());
+                        break;
+                    }
+                }
+            }
+        })
+    });
+
+    let deadline = Instant::now() + Duration::from_millis(timeout_ms);
+    let code = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break status.code().unwrap_or(1),
+            Ok(None) => {
+                if Instant::now() >= deadline {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    eprintln!(
+                        "ai-e: {} provider timed out after {timeout_ms}ms",
+                        provider.id()
+                    );
+                    break 6;
+                }
+                std::thread::sleep(Duration::from_millis(100));
+            }
+            Err(e) => {
+                eprintln!("ai-e: failed to wait for {} provider: {e}", provider.id());
+                break 1;
+            }
+        }
+    };
+
+    stop.store(true, Ordering::Relaxed);
+    if let Some(handle) = stdout_handle {
+        let _ = handle.join();
+    }
+    if let Some(handle) = stderr_handle {
+        let _ = handle.join();
+    }
     code
 }
 

@@ -50,7 +50,7 @@ pub fn main_entry() {
         std::process::exit(0);
     }
 
-    if provider.is_pty_provider() && !matches!(provider, ProviderKind::ClaudeCode) {
+    if provider.is_headless_provider() {
         let exit_code = headless::run_provider(provider, raw_args);
         std::process::exit(exit_code);
     }
@@ -178,7 +178,7 @@ Providers:
   gemini       PTY prompt-mode adapter using gemini --prompt.
   grok         PTY prompt-mode adapter using grok --single.
   copilot      PTY prompt-mode adapter using copilot --prompt.
-  kiro         PTY prompt-mode adapter using kiro-cli chat --no-interactive.
+  kiro         Pipe prompt-mode adapter using kiro-cli chat --no-interactive.
 
 Default provider:
   If the provider is omitted, ai-e currently defaults to claude for bootstrap
@@ -186,7 +186,8 @@ Default provider:
 
 Execution modes:
   claude uses the interactive PTY path copied from claude-e.
-  codex/gemini/grok/copilot/kiro use native prompt-mode CLI surfaces inside PTY.
+  codex/gemini/grok/copilot use native prompt-mode CLI surfaces inside PTY.
+  kiro uses pipe-backed chat --no-interactive (PTY hangs for kiro-cli).
 
 Options:
   -p, --print                              Print-compatible mode marker

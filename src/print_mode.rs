@@ -264,11 +264,58 @@ pub fn read_stdin_if_piped() -> Result<Option<String>, String> {
         return Ok(None);
     }
 
-    let mut input = String::new();
-    std::io::stdin()
-        .read_to_string(&mut input)
-        .map_err(|e| format!("stdin read failed: {e}"))?;
-    Ok(Some(input))
+    #[cfg(unix)]
+    let _nonblocking = StdinNonBlocking::new()?;
+
+    let mut input = Vec::new();
+    let mut buf = [0u8; 8192];
+    loop {
+        match std::io::stdin().read(&mut buf) {
+            Ok(0) => break,
+            Ok(n) => input.extend_from_slice(&buf[..n]),
+            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => break,
+            Err(e) => return Err(format!("stdin read failed: {e}")),
+        }
+    }
+
+    if input.is_empty() {
+        Ok(None)
+    } else {
+        String::from_utf8(input)
+            .map(Some)
+            .map_err(|e| format!("stdin is not valid UTF-8: {e}"))
+    }
+}
+
+#[cfg(unix)]
+struct StdinNonBlocking {
+    fd: std::os::unix::io::RawFd,
+    previous_flags: nix::fcntl::OFlag,
+}
+
+#[cfg(unix)]
+impl StdinNonBlocking {
+    fn new() -> Result<Self, String> {
+        use nix::fcntl::{FcntlArg, OFlag, fcntl};
+        use std::os::unix::io::AsRawFd;
+
+        let fd = std::io::stdin().as_raw_fd();
+        let previous_flags = OFlag::from_bits_truncate(
+            fcntl(fd, FcntlArg::F_GETFL).map_err(|e| format!("stdin fcntl failed: {e}"))?,
+        );
+        let mut flags = previous_flags;
+        flags.insert(OFlag::O_NONBLOCK);
+        fcntl(fd, FcntlArg::F_SETFL(flags)).map_err(|e| format!("stdin fcntl failed: {e}"))?;
+        Ok(Self { fd, previous_flags })
+    }
+}
+
+#[cfg(unix)]
+impl Drop for StdinNonBlocking {
+    fn drop(&mut self) {
+        use nix::fcntl::{FcntlArg, fcntl};
+        let _ = fcntl(self.fd, FcntlArg::F_SETFL(self.previous_flags));
+    }
 }
 
 pub fn config_from_options(options: PrintModeOptions) -> RunConfig {

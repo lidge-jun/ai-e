@@ -84,7 +84,14 @@ impl ProviderKind {
     pub fn is_pty_provider(self) -> bool {
         matches!(
             self,
-            Self::ClaudeCode | Self::Codex | Self::Gemini | Self::Grok | Self::Copilot | Self::Kiro
+            Self::ClaudeCode | Self::Codex | Self::Gemini | Self::Grok | Self::Copilot
+        )
+    }
+
+    pub fn is_headless_provider(self) -> bool {
+        matches!(
+            self,
+            Self::Codex | Self::Gemini | Self::Grok | Self::Copilot | Self::Kiro
         )
     }
 }
@@ -137,9 +144,29 @@ mod tests {
     }
 
     #[test]
-    fn all_supported_providers_are_pty_backed() {
+    fn pty_backed_providers_exclude_kiro() {
         for provider in [
             ProviderKind::ClaudeCode,
+            ProviderKind::Codex,
+            ProviderKind::Gemini,
+            ProviderKind::Grok,
+            ProviderKind::Copilot,
+        ] {
+            assert!(
+                provider.is_pty_provider(),
+                "{} should use PTY",
+                provider.id()
+            );
+        }
+        assert!(
+            !ProviderKind::Kiro.is_pty_provider(),
+            "kiro should not use PTY"
+        );
+    }
+
+    #[test]
+    fn headless_providers_include_kiro() {
+        for provider in [
             ProviderKind::Codex,
             ProviderKind::Gemini,
             ProviderKind::Grok,
@@ -147,8 +174,8 @@ mod tests {
             ProviderKind::Kiro,
         ] {
             assert!(
-                provider.is_pty_provider(),
-                "{} should use PTY",
+                provider.is_headless_provider(),
+                "{} should use headless adapter",
                 provider.id()
             );
         }
