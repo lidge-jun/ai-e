@@ -98,7 +98,7 @@ impl ProviderKind {
     pub fn supports_interactive(self) -> bool {
         matches!(
             self,
-            Self::Codex | Self::Gemini | Self::Grok | Self::Copilot
+            Self::Codex | Self::Gemini | Self::Grok | Self::Copilot | Self::Kiro
         )
     }
 }

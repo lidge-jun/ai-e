@@ -769,6 +769,7 @@ fn run_interactive_provider(provider: ProviderKind, raw_args: Vec<std::ffi::OsSt
         options.model.clone(),
         filter_interactive_extra_args(&options.extra_args),
         options.show_session_footer,
+        options.output_format.clone(),
     );
 
     interactive::run_interactive(config)

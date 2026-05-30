@@ -18,6 +18,7 @@ pub fn build_interactive_args(
         ProviderKind::Copilot => {
             build_copilot_interactive(prompt, resume_session, model, extra_args)
         }
+        ProviderKind::Kiro => build_kiro_interactive(prompt, resume_session, model, extra_args),
         _ => Vec::new(),
     }
 }
@@ -129,10 +130,36 @@ fn build_copilot_interactive(
     args
 }
 
+fn build_kiro_interactive(
+    prompt: Option<&str>,
+    resume_session: Option<&str>,
+    model: Option<&str>,
+    extra_args: &[String],
+) -> Vec<String> {
+    // Kiro interactive: kiro-cli chat (without --no-interactive)
+    // Uses pipe spawn, prompt sent via stdin
+    let mut args = vec!["chat".to_string()];
+    if let Some(m) = model {
+        args.extend(["--model".to_string(), m.to_string()]);
+    }
+    if let Some(session_id) = resume_session {
+        args.extend(["--resume-id".to_string(), session_id.to_string()]);
+    }
+    if !extra_args.iter().any(|a| a == "--trust-all-tools" || a == "--trust-tools") {
+        args.push("--trust-all-tools".to_string());
+    }
+    args.extend(extra_args.iter().cloned());
+    // Kiro accepts prompt as positional in chat mode
+    if let Some(p) = prompt {
+        args.push(p.to_string());
+    }
+    args
+}
+
 /// Whether the provider accepts prompt as a positional arg in interactive TUI mode.
 /// If false, prompt must be injected via bracketed paste after TUI is ready.
 pub fn accepts_positional_prompt(provider: ProviderKind) -> bool {
-    matches!(provider, ProviderKind::Codex | ProviderKind::Gemini)
+    matches!(provider, ProviderKind::Codex | ProviderKind::Gemini | ProviderKind::Kiro)
 }
 
 /// Resolve the session file path to tail for completion detection.
@@ -143,6 +170,7 @@ pub fn resolve_session_path(provider: ProviderKind, cwd: &Path) -> Option<PathBu
         ProviderKind::Gemini => resolve_gemini_session_dir(cwd),
         ProviderKind::Grok => resolve_grok_session_dir(cwd),
         ProviderKind::Copilot => resolve_copilot_session_dir(),
+        ProviderKind::Kiro => resolve_kiro_session_dir(),
         _ => None,
     }
 }
@@ -216,26 +244,50 @@ fn resolve_copilot_session_dir() -> Option<PathBuf> {
     }
 }
 
-/// Find the newest JSONL file in a directory (modified after `after_ms` epoch).
-pub fn find_newest_jsonl(dir: &Path, after_ms: u64) -> Option<PathBuf> {
-    find_newest_file_recursive(dir, "jsonl", after_ms)
+fn resolve_kiro_session_dir() -> Option<PathBuf> {
+    // Kiro stores conversations in sqlite, but also writes stdout which we capture.
+    // For session file tailing, we use the kiro data directory.
+    let path = crate::providers::kiro_session::resolve_kiro_data_path();
+    let parent = std::path::Path::new(&path).parent()?;
+    if parent.is_dir() {
+        Some(parent.to_path_buf())
+    } else {
+        None
+    }
 }
 
-fn find_newest_file_recursive(dir: &Path, ext: &str, after_ms: u64) -> Option<PathBuf> {
+/// Find the newest JSONL file in a directory (modified after `after_ms` epoch).
+pub fn find_newest_jsonl(dir: &Path, after_ms: u64) -> Option<PathBuf> {
+    find_newest_file_recursive(dir, "jsonl", after_ms, None)
+}
+
+/// Find the newest JSONL file matching a specific filename.
+pub fn find_newest_jsonl_named(dir: &Path, after_ms: u64, name: &str) -> Option<PathBuf> {
+    find_newest_file_recursive(dir, "jsonl", after_ms, Some(name))
+}
+
+fn find_newest_file_recursive(dir: &Path, ext: &str, after_ms: u64, name_filter: Option<&str>) -> Option<PathBuf> {
     let mut newest: Option<(PathBuf, u64)> = None;
-    visit_dir_recursive(dir, ext, after_ms, &mut newest);
+    visit_dir_recursive(dir, ext, after_ms, name_filter, &mut newest);
     newest.map(|(path, _)| path)
 }
 
-fn visit_dir_recursive(dir: &Path, ext: &str, after_ms: u64, newest: &mut Option<(PathBuf, u64)>) {
+fn visit_dir_recursive(dir: &Path, ext: &str, after_ms: u64, name_filter: Option<&str>, newest: &mut Option<(PathBuf, u64)>) {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return;
     };
     for entry in entries.flatten() {
         let path = entry.path();
         if path.is_dir() {
-            visit_dir_recursive(&path, ext, after_ms, newest);
+            visit_dir_recursive(&path, ext, after_ms, name_filter, newest);
         } else if path.extension().and_then(|e| e.to_str()) == Some(ext) {
+            // Apply name filter if specified
+            if let Some(filter) = name_filter {
+                let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+                if !file_name.contains(filter) {
+                    continue;
+                }
+            }
             if let Some(mtime_ms) = file_mtime_ms(&path) {
                 if mtime_ms >= after_ms {
                     if newest.as_ref().map_or(true, |(_, t)| mtime_ms > *t) {
@@ -283,6 +335,10 @@ pub fn extract_session_id(provider: ProviderKind, session_path: &Path) -> Option
         ProviderKind::Copilot => {
             // session-state/<uuid>/ → parent dir name
             session_path.parent()?.file_name()?.to_str().map(String::from)
+        }
+        ProviderKind::Kiro => {
+            // Kiro session ID comes from sqlite; for file-based, use kiro_session module
+            None
         }
         _ => None,
     }
