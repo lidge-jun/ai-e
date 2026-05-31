@@ -1,36 +1,49 @@
 # ai-e Structure
 
-`ai-e` is the multi-provider successor scaffold to the standalone `claude-e`
-runtime. Claude Code is PTY-backed with interactive prompt injection; Codex,
-Gemini, Grok, and Copilot are PTY prompt-mode adapters over their native
-one-shot CLI surfaces.
+`ai-e` is the multi-provider PTY/pipe-backed exec layer for interactive AI CLIs.
+It evolved from the standalone `claude-e` runtime into a unified command that
+drives Claude Code, Codex, Gemini, Grok, Copilot, Kiro, and Antigravity through
+the same process contract.
+
+## Execution Paths
+
+| Path | Providers | Description |
+|---|---|---|
+| Claude PTY + hook | claude | Interactive prompt injection, transcript tailing, hook-based lifecycle |
+| Interactive bypass | codex, gemini, grok, copilot, kiro, agy | Spawn TUI/pipe, inject prompt, tail session file for completion |
+| Headless (legacy) | codex, gemini, grok, copilot, kiro, agy | One-shot native CLI flags; deprecated for most providers |
+
+Interactive bypass is the default for codex/gemini/grok/copilot/kiro. Agy
+defaults to headless (TUI output is not parseable) with `--interactive` opt-in.
 
 ## Modules
 
 | Area | Files | Responsibility |
 |---|---|---|
-| CLI entrypoint | `src/lib.rs`, `src/args.rs`, `src/bin/ai-e.rs`, `bin/ai-e` | `ai-e <provider> ...` parsing and npm binary wrapper |
-| Provider registry | `src/providers/` | provider ids, binary resolution metadata, PTY routing |
-| PTY prompt-mode providers | `src/headless.rs` | Codex/Gemini/Grok/Copilot option parsing, arg construction, timeout-bound PTY spawn |
-| Claude PTY provider | `src/child.rs`, `src/hook.rs`, `src/transcript.rs`, `src/normalize.rs` | current runnable provider path copied from `claude-e` |
-| Runtime config | `src/config.rs`, `src/protocol.rs` | run ids, session ids, runtime JSONL envelope |
+| CLI entrypoint | `src/lib.rs`, `src/args.rs`, `src/bin/ai-e.rs`, `bin/ai-e` | `ai-e <provider> ...` parsing, mode routing, npm binary wrapper |
+| Provider registry | `src/providers/mod.rs`, `src/providers/claude_code.rs` | Provider ids, binary resolution, PTY/pipe classification |
+| Interactive bypass | `src/interactive.rs`, `src/interactive_providers.rs` | PTY/pipe TUI spawn, session file tailing, completion detection, resume |
+| Headless providers | `src/headless.rs` | Legacy one-shot PTY spawn with timeout for all non-claude providers |
+| Claude PTY provider | `src/child.rs`, `src/hook.rs`, `src/transcript.rs`, `src/normalize.rs` | Hook-based lifecycle, transcript replay, stream-json normalization |
+| Kiro session | `src/providers/kiro_session.rs` | Kiro sqlite session resolution, conversation ID extraction |
+| Runtime config | `src/config.rs`, `src/protocol.rs` | Run ids, session ids, runtime JSONL envelope |
 | Terminal handling | `src/terminal.rs`, `src/cleanup.rs`, `src/sanitize.rs` | PTY terminal responses, prompt safety, process cleanup |
 | Print compatibility | `src/print_mode.rs` | `-p`-style prompt/stdin/output parsing for the Claude provider |
-| Packaging | `Cargo.toml`, `package.json`, `bin/`, `scripts/`, `.github/workflows/`, `platform-packages/`, `tests/package-contract.test.cjs` | Rust build, prebuilt platform packages, npm install, dry-run/publish/release scripts |
+| Packaging | `Cargo.toml`, `package.json`, `bin/`, `scripts/`, `.github/workflows/`, `platform-packages/`, `tests/` | Rust build, prebuilt platform packages, npm install, release scripts |
 
 ## Documents
 
-- `cli_surface.md` - supported commands, provider syntax, and npm packaging.
-- `provider_adapter.md` - adapter contract for Codex, Gemini, Grok, Copilot, and future CLIs.
-- `runtime_contract.md` - JSONL lifecycle and result shape.
-- `cli_jaw_migration.md` - target cli-jaw integration path.
+- `cli_surface.md` — supported commands, provider syntax, interactive/headless modes, npm packaging.
+- `provider_adapter.md` — adapter contract for all 7 providers.
+- `runtime_contract.md` — JSONL lifecycle, output formats, exit codes, session management.
+- `cli_jaw_migration.md` — target cli-jaw integration path.
 
 ## Current Invariants
 
 - Public npm command: `ai-e`.
-- Provider-explicit shape: `ai-e claude ...`, `ai-e codex ...`, `ai-e gemini ...`, `ai-e grok ...`.
-- PTY providers: `claude`, `codex`, `gemini`, `grok`, `copilot`.
-- AGY/Antigravity is intentionally not a provider id.
-- No provider-specific bins are exposed by this npm package yet.
-- `jaw_runtime` envelope remains for cli-jaw compatibility, with generic `provider_spawned` events added for multi-provider use.
-- Main package `optionalDependencies` and `platform-packages/*` versions must match the main package version before release.
+- Provider-explicit shape: `ai-e <provider> ...`.
+- 7 providers: `claude`, `codex`, `gemini`, `grok`, `copilot`, `kiro`, `agy`.
+- Default mode: interactive bypass (except agy → headless, claude → PTY+hook).
+- Session footer emitted for all providers with resume support.
+- `jaw_runtime` envelope remains for cli-jaw compatibility.
+- Main package `optionalDependencies` and `platform-packages/*` versions must match before release.

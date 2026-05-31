@@ -87,6 +87,7 @@ impl ProviderKind {
             .unwrap_or_else(|| self.default_binary().to_string())
     }
 
+    #[allow(dead_code)]
     pub fn is_pty_provider(self) -> bool {
         matches!(
             self,
@@ -101,6 +102,7 @@ impl ProviderKind {
         )
     }
 
+    #[allow(dead_code)]
     pub fn supports_interactive(self) -> bool {
         matches!(
             self,
