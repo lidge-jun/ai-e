@@ -5,6 +5,7 @@ mod config;
 mod headless;
 mod hook;
 mod interactive;
+mod interactive_normalize;
 mod interactive_providers;
 mod normalize;
 mod print_mode;
