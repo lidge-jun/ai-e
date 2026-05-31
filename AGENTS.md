@@ -8,7 +8,7 @@
 - Prefer `cargo fmt --check`, `cargo test --locked`, and `cargo build --release --locked` before publishing runtime changes.
 - Keep the public npm package and command name `ai-e`.
 - Do not expose provider-specific bins such as `claude-e` from this package; those remain separate packages or future thin aliases.
-- Keep provider-specific behavior behind `src/providers/` boundaries before adding Codex, Gemini, Grok, or other adapters.
+- Keep provider-specific behavior behind `src/providers/` and `src/interactive_providers.rs` boundaries.
 - Preserve stdout JSONL compatibility for cli-jaw unless `structure/runtime_contract.md` and `devlog/` describe the migration.
 
 ## Documentation
