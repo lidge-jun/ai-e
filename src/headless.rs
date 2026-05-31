@@ -425,7 +425,27 @@ fn build_agy_args(options: &HeadlessOptions, prompt: &str) -> Vec<String> {
     if !contains_any(&options.extra_args, &["--print-timeout"]) {
         args.extend(["--print-timeout".to_string(), "10m".to_string()]);
     }
-    args.extend(options.extra_args.clone());
+    // Map --resume to --conversation for agy
+    let mut i = 0;
+    while i < options.extra_args.len() {
+        match options.extra_args[i].as_str() {
+            "--resume" | "--resume-id" | "-r" => {
+                if let Some(id) = options.extra_args.get(i + 1) {
+                    args.extend(["--conversation".to_string(), id.clone()]);
+                }
+                i += 2;
+            }
+            s if s.starts_with("--resume=") => {
+                let id = s.trim_start_matches("--resume=");
+                args.extend(["--conversation".to_string(), id.to_string()]);
+                i += 1;
+            }
+            _ => {
+                args.push(options.extra_args[i].clone());
+                i += 1;
+            }
+        }
+    }
     args
 }
 

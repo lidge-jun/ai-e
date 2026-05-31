@@ -43,10 +43,9 @@ fn build_codex_interactive(
         args.push("--dangerously-bypass-approvals-and-sandbox".to_string());
     }
     args.extend(extra_args.iter().cloned());
-    if resume_session.is_none() {
-        if let Some(p) = prompt {
-            args.push(p.to_string());
-        }
+    // codex resume accepts [PROMPT] as positional too
+    if let Some(p) = prompt {
+        args.push(p.to_string());
     }
     args
 }
@@ -350,15 +349,10 @@ fn file_mtime_ms(path: &Path) -> Option<u64> {
 pub fn extract_session_id(provider: ProviderKind, session_path: &Path) -> Option<String> {
     match provider {
         ProviderKind::Codex => {
-            // rollout-<timestamp>-<uuid>.jsonl → extract uuid
+            // rollout-2026-05-31T13-07-46-<uuid>.jsonl → extract uuid (last 5-segment hyphenated part)
             let name = session_path.file_stem()?.to_string_lossy().to_string();
-            // Format: rollout-1234567890-<uuid>
-            let parts: Vec<&str> = name.splitn(3, '-').collect();
-            if parts.len() >= 3 {
-                Some(parts[2..].join("-"))
-            } else {
-                None
-            }
+            // UUID is the last 36 chars (8-4-4-4-12 format)
+            extract_trailing_uuid(&name)
         }
         ProviderKind::Gemini => {
             // session-<timestamp>-<id>.jsonl
@@ -429,6 +423,29 @@ fn urlencoded_path(path: &Path) -> String {
     s.replace('/', "%2F")
 }
 
+/// Extract a trailing UUID (8-4-4-4-12 hex) from a string like "rollout-2026-05-31T13-07-46-019e7c37-69c6-7141-923a-4edcb5409939"
+fn extract_trailing_uuid(s: &str) -> Option<String> {
+    // UUID = 8-4-4-4-12 hex chars = 36 chars total
+    if s.len() < 36 {
+        return None;
+    }
+    let candidate = &s[s.len() - 36..];
+    // Validate UUID format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+    let parts: Vec<&str> = candidate.split('-').collect();
+    if parts.len() == 5
+        && parts[0].len() == 8
+        && parts[1].len() == 4
+        && parts[2].len() == 4
+        && parts[3].len() == 4
+        && parts[4].len() == 12
+        && candidate.chars().all(|c| c.is_ascii_hexdigit() || c == '-')
+    {
+        Some(candidate.to_string())
+    } else {
+        None
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -460,8 +477,8 @@ mod tests {
         );
         assert_eq!(args[0], "resume");
         assert_eq!(args[1], "abc-123");
-        // prompt not appended in resume mode (codex resume doesn't take positional)
-        assert!(!args.contains(&"continue".to_string()));
+        // codex resume accepts prompt as positional
+        assert!(args.contains(&"continue".to_string()));
     }
 
     #[test]
