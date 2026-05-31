@@ -103,7 +103,14 @@ pub fn run_interactive(config: InteractiveConfig) -> i32 {
 
     // Kiro hangs in PTY — use pipe spawn with stdout parsing instead
     if config.provider == ProviderKind::Kiro {
-        return run_kiro_pipe(&config, &run_id, &tui_args, &stop, started_at_ms, &before_files);
+        return run_kiro_pipe(
+            &config,
+            &run_id,
+            &tui_args,
+            &stop,
+            started_at_ms,
+            &before_files,
+        );
     }
 
     let mut pty_child = match child::PtyChild::spawn(
@@ -252,7 +259,11 @@ fn wait_and_tail(
                 interactive_providers::resolve_session_path(config.provider, &config.cwd)
             {
                 let found = if config.provider == ProviderKind::Grok {
-                    interactive_providers::find_newest_jsonl_named(&dir, started_at_ms, "chat_history")
+                    interactive_providers::find_newest_jsonl_named(
+                        &dir,
+                        started_at_ms,
+                        "chat_history",
+                    )
                 } else {
                     interactive_providers::find_newest_jsonl(&dir, started_at_ms)
                 };
@@ -404,7 +415,10 @@ fn process_session_line(
     };
 
     // Track assistant messages for result synthesis
-    let record_type = normalized.get("type").and_then(|t| t.as_str()).unwrap_or("");
+    let record_type = normalized
+        .get("type")
+        .and_then(|t| t.as_str())
+        .unwrap_or("");
     if record_type == "assistant" {
         *last_assistant = Some(normalized.clone());
     }
@@ -564,7 +578,10 @@ fn normalize_kiro(value: &serde_json::Value) -> Option<serde_json::Value> {
                 "type": msg_type,
                 "message": value,
             });
-            if let Some(id) = value.get("conversationId").or_else(|| value.get("session_id")) {
+            if let Some(id) = value
+                .get("conversationId")
+                .or_else(|| value.get("session_id"))
+            {
                 out["session_id"] = id.clone();
             }
             Some(out)

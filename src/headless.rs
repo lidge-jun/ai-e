@@ -106,8 +106,7 @@ pub fn run_provider(provider: ProviderKind, raw_args: Vec<OsString>) -> i32 {
     }
 
     if matches!(provider, ProviderKind::Agy) && show_session_footer {
-        let effective_cwd = cwd.clone()
-            .or_else(|| std::env::current_dir().ok());
+        let effective_cwd = cwd.clone().or_else(|| std::env::current_dir().ok());
         if let Some(ref p) = effective_cwd {
             emit_agy_session_footer(p);
         }
@@ -516,8 +515,12 @@ fn emit_agy_session_footer(cwd: &std::path::Path) {
         .join("antigravity-cli")
         .join("cache")
         .join("last_conversations.json");
-    let Ok(content) = std::fs::read_to_string(&path) else { return };
-    let Ok(map) = serde_json::from_str::<serde_json::Value>(&content) else { return };
+    let Ok(content) = std::fs::read_to_string(&path) else {
+        return;
+    };
+    let Ok(map) = serde_json::from_str::<serde_json::Value>(&content) else {
+        return;
+    };
     let cwd_str = cwd.to_string_lossy();
     if let Some(id) = map.get(cwd_str.as_ref()).and_then(|v| v.as_str()) {
         eprintln!();

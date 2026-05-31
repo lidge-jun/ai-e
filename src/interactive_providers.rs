@@ -39,7 +39,10 @@ fn build_codex_interactive(
         args.extend(["--model".to_string(), m.to_string()]);
     }
     args.push("--no-alt-screen".to_string());
-    if !extra_args.iter().any(|a| a == "--dangerously-bypass-approvals-and-sandbox") {
+    if !extra_args
+        .iter()
+        .any(|a| a == "--dangerously-bypass-approvals-and-sandbox")
+    {
         args.push("--dangerously-bypass-approvals-and-sandbox".to_string());
     }
     args.extend(extra_args.iter().cloned());
@@ -121,7 +124,10 @@ fn build_copilot_interactive(
     if let Some(session_id) = resume_session {
         args.extend([format!("--resume={session_id}")]);
     }
-    if !extra_args.iter().any(|a| a == "--allow-all" || a == "--yolo") {
+    if !extra_args
+        .iter()
+        .any(|a| a == "--allow-all" || a == "--yolo")
+    {
         args.push("--yolo".to_string());
     }
     args.extend(extra_args.iter().cloned());
@@ -145,7 +151,10 @@ fn build_kiro_interactive(
     if let Some(session_id) = resume_session {
         args.extend(["--resume-id".to_string(), session_id.to_string()]);
     }
-    if !extra_args.iter().any(|a| a == "--trust-all-tools" || a == "--trust-tools") {
+    if !extra_args
+        .iter()
+        .any(|a| a == "--trust-all-tools" || a == "--trust-tools")
+    {
         args.push("--trust-all-tools".to_string());
     }
     args.extend(extra_args.iter().cloned());
@@ -167,7 +176,10 @@ fn build_agy_interactive(
     if let Some(session_id) = resume_session {
         args.extend(["--conversation".to_string(), session_id.to_string()]);
     }
-    if !extra_args.iter().any(|a| a == "--dangerously-skip-permissions") {
+    if !extra_args
+        .iter()
+        .any(|a| a == "--dangerously-skip-permissions")
+    {
         args.push("--dangerously-skip-permissions".to_string());
     }
     args.extend(extra_args.iter().cloned());
@@ -181,7 +193,10 @@ fn build_agy_interactive(
 /// Whether the provider accepts prompt as a positional arg in interactive TUI mode.
 /// If false, prompt must be injected via bracketed paste after TUI is ready.
 pub fn accepts_positional_prompt(provider: ProviderKind) -> bool {
-    matches!(provider, ProviderKind::Codex | ProviderKind::Gemini | ProviderKind::Kiro | ProviderKind::Agy)
+    matches!(
+        provider,
+        ProviderKind::Codex | ProviderKind::Gemini | ProviderKind::Kiro | ProviderKind::Agy
+    )
 }
 
 /// Resolve the session file path to tail for completion detection.
@@ -201,11 +216,7 @@ pub fn resolve_session_path(provider: ProviderKind, cwd: &Path) -> Option<PathBu
 fn resolve_codex_session_dir() -> Option<PathBuf> {
     let home = std::env::var("HOME").ok()?;
     let dir = PathBuf::from(home).join(".codex").join("sessions");
-    if dir.is_dir() {
-        Some(dir)
-    } else {
-        None
-    }
+    if dir.is_dir() { Some(dir) } else { None }
 }
 
 fn resolve_gemini_session_dir(cwd: &Path) -> Option<PathBuf> {
@@ -260,11 +271,7 @@ fn resolve_grok_session_dir(cwd: &Path) -> Option<PathBuf> {
 fn resolve_copilot_session_dir() -> Option<PathBuf> {
     let home = std::env::var("HOME").ok()?;
     let dir = PathBuf::from(home).join(".copilot").join("session-state");
-    if dir.is_dir() {
-        Some(dir)
-    } else {
-        None
-    }
+    if dir.is_dir() { Some(dir) } else { None }
 }
 
 fn resolve_kiro_session_dir() -> Option<PathBuf> {
@@ -285,11 +292,7 @@ fn resolve_agy_session_dir() -> Option<PathBuf> {
         .join(".gemini")
         .join("antigravity-cli")
         .join("conversations");
-    if dir.is_dir() {
-        Some(dir)
-    } else {
-        None
-    }
+    if dir.is_dir() { Some(dir) } else { None }
 }
 
 /// Find the newest JSONL file in a directory (modified after `after_ms` epoch).
@@ -302,13 +305,24 @@ pub fn find_newest_jsonl_named(dir: &Path, after_ms: u64, name: &str) -> Option<
     find_newest_file_recursive(dir, "jsonl", after_ms, Some(name))
 }
 
-fn find_newest_file_recursive(dir: &Path, ext: &str, after_ms: u64, name_filter: Option<&str>) -> Option<PathBuf> {
+fn find_newest_file_recursive(
+    dir: &Path,
+    ext: &str,
+    after_ms: u64,
+    name_filter: Option<&str>,
+) -> Option<PathBuf> {
     let mut newest: Option<(PathBuf, u64)> = None;
     visit_dir_recursive(dir, ext, after_ms, name_filter, &mut newest);
     newest.map(|(path, _)| path)
 }
 
-fn visit_dir_recursive(dir: &Path, ext: &str, after_ms: u64, name_filter: Option<&str>, newest: &mut Option<(PathBuf, u64)>) {
+fn visit_dir_recursive(
+    dir: &Path,
+    ext: &str,
+    after_ms: u64,
+    name_filter: Option<&str>,
+    newest: &mut Option<(PathBuf, u64)>,
+) {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return;
     };
@@ -361,11 +375,19 @@ pub fn extract_session_id(provider: ProviderKind, session_path: &Path) -> Option
         }
         ProviderKind::Grok => {
             // Parent dir is the session UUID
-            session_path.parent()?.file_name()?.to_str().map(String::from)
+            session_path
+                .parent()?
+                .file_name()?
+                .to_str()
+                .map(String::from)
         }
         ProviderKind::Copilot => {
             // session-state/<uuid>/ → parent dir name
-            session_path.parent()?.file_name()?.to_str().map(String::from)
+            session_path
+                .parent()?
+                .file_name()?
+                .to_str()
+                .map(String::from)
         }
         ProviderKind::Kiro => {
             // Kiro session ID comes from sqlite; for file-based, use kiro_session module
