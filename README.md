@@ -4,6 +4,8 @@
 [![npm version](https://img.shields.io/npm/v/@bitkyc08/ai-e.svg)](https://www.npmjs.com/package/@bitkyc08/ai-e)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/runtime-Rust-orange.svg)](Cargo.toml)
+[![GitHub stars](https://img.shields.io/github/stars/lidge-jun/ai-e?style=flat&label=stars)](https://github.com/lidge-jun/ai-e)
+[![GitHub Pages ready](https://img.shields.io/badge/GitHub%20Pages-docs%20ready-111827)](docs/index.html)
 
 `ai-e` is a modular PTY exec layer for AI CLIs.
 
@@ -20,6 +22,20 @@ ai-e grok --model auto "explain quicksort"
 ai-e agy "respond with hello world"
 ai-e kiro --model auto "summarize this repo"
 ```
+
+## Public Surface
+
+| Surface | Link | Status |
+| --- | --- | --- |
+| npm package | [`@bitkyc08/ai-e`](https://www.npmjs.com/package/@bitkyc08/ai-e) | public package |
+| Repository | [`lidge-jun/ai-e`](https://github.com/lidge-jun/ai-e) | public source |
+| Docs landing page | [`docs/index.html`](docs/index.html) | local Pages entrypoint, deploys after an authorized push |
+| Runtime contract | [`structure/runtime_contract.md`](structure/runtime_contract.md) | JSONL, timeout, transcript, and resume source |
+| Provider adapters | [`structure/provider_adapter.md`](structure/provider_adapter.md) | provider classes, binary resolution, and adapter boundaries |
+
+GitHub Pages is documented as **ready, not live** in this local state because
+the GitHub Pages API currently returns 404 for this repository. The added Pages
+workflow publishes `/docs` once the owner authorizes a push.
 
 Providers run in two modes:
 
@@ -57,6 +73,56 @@ stable result object.
 | Copilot CLI | `ai-e copilot ...` | Interactive | Uses `copilot` TUI with sqlite session store. |
 | Kiro CLI | `ai-e kiro ...` | Pipe (headless) | `kiro-cli chat --no-interactive`; PTY hangs for kiro. |
 | Antigravity | `ai-e agy ...` | Headless (default) | `agy -p`; interactive opt-in via `--interactive`. |
+
+## Architecture Snapshot
+
+```text
+agent / cli-jaw
+  -> ai-e <provider>
+  -> provider adapter
+  -> PTY interactive path or headless path
+  -> provider transcript/session source
+  -> common text/json/stream-json output
+
+providers
+  -> claude / codex / gemini / grok / copilot
+  -> kiro / agy
+```
+
+The wrapper keeps provider-specific behavior behind adapter boundaries while
+preserving one stdout contract for callers. Runtime metadata, tool progress,
+timeouts, and resume hints stay explicit so orchestrators can classify failures
+without scraping a provider TUI.
+
+## Verification Policy
+
+Use these local gates before claiming a provider, runtime, or package change:
+
+```bash
+npm run fmt:check
+npm run check
+npm run test
+npm run build
+npm run publish:dry-run
+npm run verify
+```
+
+Current remote CI signal: the latest `Tests` workflow on `origin/main` is
+failing because that remote commit has Rust formatting drift. This local
+checkout already passes `npm run fmt:check`; remote verification of this exact
+work requires an authorized push or PR.
+
+## Safety Model
+
+- Provider adapters add trust/permission flags only at the provider boundary.
+- stdout remains reserved for the selected result format; diagnostics and
+  progress belong on stderr.
+- Session-tail paths and resume IDs are provider-specific and documented in
+  `structure/provider_adapter.md`.
+- Browser-hosted GPT Pro validation is intentionally routed to `agbrowse` help
+  surfaces, not live web mutation, unless a user explicitly asks for it.
+- The package is MIT licensed and this repository includes a root
+  [`LICENSE`](LICENSE) file.
 
 ## Install
 

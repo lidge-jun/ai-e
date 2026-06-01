@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" role="img" aria-labelledby="title desc">
+  <title id="title">ai-e social preview</title>
+  <desc id="desc">A modular PTY exec layer for interactive AI CLIs.</desc>
+  <rect width="1200" height="630" fill="#08111f"/>
+  <path d="M0 470c190-70 360-78 560-32 240 55 420 16 640-80v272H0Z" fill="#111827"/>
+  <rect x="76" y="76" width="1048" height="478" rx="34" fill="#0b1220" stroke="#1d4ed8" stroke-width="2"/>
+  <rect x="118" y="118" width="964" height="70" rx="20" fill="#111a2d"/>
+  <circle cx="154" cy="153" r="10" fill="#ef4444"/>
+  <circle cx="188" cy="153" r="10" fill="#f59e0b"/>
+  <circle cx="222" cy="153" r="10" fill="#22c55e"/>
+  <text x="270" y="161" fill="#bfdbfe" font-family="SFMono-Regular, Menlo, monospace" font-size="22">ai-e codex --output-format stream-json</text>
+  <text x="126" y="265" fill="#60a5fa" font-family="Inter, Arial, sans-serif" font-size="30" font-weight="800">AI-E</text>
+  <text x="126" y="336" fill="#f8fafc" font-family="Inter, Arial, sans-serif" font-size="64" font-weight="850">One exec contract</text>
+  <text x="126" y="408" fill="#f8fafc" font-family="Inter, Arial, sans-serif" font-size="64" font-weight="850">for AI CLIs</text>
+  <text x="130" y="464" fill="#cbd5e1" font-family="Inter, Arial, sans-serif" font-size="27">Claude, Codex, Gemini, Grok, Copilot, Kiro, and Agy.</text>
+  <g transform="translate(780 246)">
+    <rect width="260" height="184" rx="22" fill="#090f1d" stroke="#334155"/>
+    <text x="26" y="48" fill="#93c5fd" font-family="SFMono-Regular, Menlo, monospace" font-size="18">&gt; provider_spawned</text>
+    <text x="26" y="88" fill="#c4b5fd" font-family="SFMono-Regular, Menlo, monospace" font-size="18">&gt; transcript_tail</text>
+    <text x="26" y="128" fill="#86efac" font-family="SFMono-Regular, Menlo, monospace" font-size="18">&gt; result</text>
+    <text x="26" y="160" fill="#fcd34d" font-family="SFMono-Regular, Menlo, monospace" font-size="18">&gt; resume_hint</text>
+  </g>
+</svg>

@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ai-e - Modular AI CLI execution</title>
+  <meta name="description" content="A modular PTY exec layer for interactive and headless AI CLIs with one output contract.">
+  <link rel="canonical" href="https://lidge-jun.github.io/ai-e/">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="ai-e">
+  <meta property="og:description" content="Drive Claude, Codex, Gemini, Grok, Copilot, Kiro, and Agy through one auditable CLI contract.">
+  <meta property="og:url" content="https://lidge-jun.github.io/ai-e/">
+  <meta property="og:image" content="https://lidge-jun.github.io/ai-e/assets/social-preview.svg">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="ai-e">
+  <meta name="twitter:description" content="One provider-aware execution layer for interactive AI CLIs.">
+  <meta name="twitter:image" content="https://lidge-jun.github.io/ai-e/assets/social-preview.svg">
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #08111f;
+      --panel: #0b1220;
+      --panel-2: #111827;
+      --line: #1d4ed8;
+      --text: #f8fafc;
+      --muted: #b6c2d5;
+      --blue: #60a5fa;
+      --purple: #a78bfa;
+      --green: #22c55e;
+      --max: 1120px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--text);
+      background: radial-gradient(circle at 78% 20%, rgba(96, 165, 250, .22), transparent 30%), var(--bg);
+      line-height: 1.5;
+    }
+    a { color: inherit; }
+    .nav {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      background: rgba(8, 17, 31, .82);
+      border-bottom: 1px solid rgba(96, 165, 250, .18);
+      backdrop-filter: blur(18px);
+    }
+    .nav-inner {
+      max-width: var(--max);
+      margin: 0 auto;
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-weight: 850;
+      letter-spacing: .04em;
+    }
+    .mark {
+      width: 34px;
+      height: 34px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      color: var(--blue);
+      background: var(--panel-2);
+      font: 800 15px SFMono-Regular, Menlo, monospace;
+    }
+    .nav-links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .nav-links a { text-decoration: none; }
+    .hero {
+      max-width: var(--max);
+      margin: 0 auto;
+      padding: 86px 24px 58px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(320px, 1fr);
+      gap: 42px;
+      align-items: center;
+    }
+    .eyebrow {
+      color: var(--blue);
+      font-size: 13px;
+      font-weight: 850;
+      letter-spacing: .16em;
+      text-transform: uppercase;
+    }
+    h1 {
+      margin: 14px 0 20px;
+      font-size: clamp(46px, 7vw, 84px);
+      line-height: .96;
+      letter-spacing: 0;
+    }
+    .hero p {
+      max-width: 650px;
+      margin: 0;
+      color: var(--muted);
+      font-size: 20px;
+    }
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 30px;
+    }
+    .button {
+      display: inline-flex;
+      align-items: center;
+      min-height: 44px;
+      padding: 0 16px;
+      border-radius: 8px;
+      border: 1px solid rgba(96, 165, 250, .28);
+      text-decoration: none;
+      font-weight: 750;
+      background: #f8fafc;
+      color: #08111f;
+    }
+    .button.secondary {
+      background: transparent;
+      color: var(--text);
+    }
+    .terminal {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      overflow: hidden;
+      background: rgba(11, 18, 32, .9);
+      box-shadow: 0 28px 70px rgba(0, 0, 0, .42);
+    }
+    .terminal-head {
+      display: flex;
+      gap: 9px;
+      padding: 14px 16px;
+      background: var(--panel-2);
+      border-bottom: 1px solid rgba(96, 165, 250, .16);
+    }
+    .dot { width: 10px; height: 10px; border-radius: 50%; }
+    .red { background: #ef4444; }
+    .yellow { background: #f59e0b; }
+    .green { background: var(--green); }
+    pre {
+      margin: 0;
+      padding: 24px;
+      overflow-x: auto;
+      color: #bfdbfe;
+      font: 14px/1.66 SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+    .section {
+      max-width: var(--max);
+      margin: 0 auto;
+      padding: 42px 24px;
+    }
+    h2 {
+      margin: 0 0 20px;
+      font-size: 32px;
+      letter-spacing: 0;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+    }
+    .card {
+      border: 1px solid rgba(96, 165, 250, .18);
+      border-radius: 8px;
+      padding: 20px;
+      background: rgba(17, 24, 39, .74);
+    }
+    .card h3 {
+      margin: 0 0 8px;
+      font-size: 18px;
+    }
+    .card p, .section p {
+      color: var(--muted);
+      margin: 0;
+    }
+    .split {
+      display: grid;
+      grid-template-columns: minmax(0, .9fr) minmax(320px, 1.1fr);
+      gap: 24px;
+      align-items: start;
+    }
+    .list {
+      display: grid;
+      gap: 10px;
+      padding: 0;
+      margin: 0;
+      list-style: none;
+    }
+    .list li {
+      border: 1px solid rgba(96, 165, 250, .16);
+      border-radius: 8px;
+      padding: 12px 14px;
+      background: rgba(17, 24, 39, .52);
+      color: var(--muted);
+    }
+    footer {
+      max-width: var(--max);
+      margin: 0 auto;
+      padding: 36px 24px 54px;
+      color: var(--muted);
+      border-top: 1px solid rgba(96, 165, 250, .14);
+    }
+    @media (max-width: 860px) {
+      .hero, .split { grid-template-columns: 1fr; }
+      .grid { grid-template-columns: 1fr; }
+      .nav-inner { align-items: flex-start; flex-direction: column; }
+      h1 { font-size: 50px; }
+    }
+    @media (max-width: 440px) {
+      .hero { padding-top: 54px; }
+      h1 { font-size: 40px; }
+      .hero p { font-size: 17px; }
+      pre { font-size: 12px; }
+    }
+  </style>
+</head>
+<body>
+  <nav class="nav" aria-label="Primary">
+    <div class="nav-inner">
+      <div class="brand"><span class="mark">ai</span><span>AI-E</span></div>
+      <div class="nav-links">
+        <a href="#providers">Providers</a>
+        <a href="#runtime">Runtime</a>
+        <a href="#verification">Verification</a>
+        <a href="https://github.com/lidge-jun/ai-e">GitHub</a>
+      </div>
+    </div>
+  </nav>
+  <main>
+    <section class="hero">
+      <div>
+        <div class="eyebrow">Provider-aware PTY runtime</div>
+        <h1>One exec contract for AI CLIs.</h1>
+        <p>ai-e drives Claude, Codex, Gemini, Grok, Copilot, Kiro, and Antigravity through a modular Rust wrapper with shared output rules.</p>
+        <div class="actions">
+          <a class="button" href="https://www.npmjs.com/package/@bitkyc08/ai-e">Install from npm</a>
+          <a class="button secondary" href="https://github.com/lidge-jun/ai-e/blob/main/README.md">Read the README</a>
+        </div>
+      </div>
+      <div class="terminal" aria-label="ai-e quickstart terminal">
+        <div class="terminal-head"><span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span></div>
+        <pre><code>npm install -g @bitkyc08/ai-e
+ai-e claude "summarize this repo"
+ai-e codex --model gpt-5-mini \
+  "audit this package"
+ai-e grok --model auto \
+  --output-format stream-json \
+  "explain the provider boundary"</code></pre>
+      </div>
+    </section>
+
+    <section class="section" id="providers">
+      <h2>Provider adapters stay explicit.</h2>
+      <div class="grid">
+        <article class="card">
+          <h3>Interactive CLIs</h3>
+          <p>Codex, Gemini, Grok, Copilot, and Claude can run through PTY supervision with session-tail output.</p>
+        </article>
+        <article class="card">
+          <h3>Headless providers</h3>
+          <p>Kiro and Antigravity use safer one-shot command paths when PTY behavior is not reliable.</p>
+        </article>
+        <article class="card">
+          <h3>Common result shape</h3>
+          <p>Text, json, and stream-json modes give callers one parsing surface across provider-specific CLIs.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="section split" id="runtime">
+      <div>
+        <h2>Built for orchestration boundaries.</h2>
+        <p>ai-e keeps permission flags, binary resolution, transcript discovery, and resume IDs inside provider adapters while preserving a stable stdout contract for cli-jaw and shell callers.</p>
+      </div>
+      <div class="terminal">
+        <pre><code>cli-jaw
+  -> ai-e claude ...
+  -> ai-e codex ...
+  -> ai-e grok ...
+  -> ai-e kiro ...
+  -> ai-e agy ...
+  -> ai-e gemini ...
+  -> ai-e copilot ...</code></pre>
+      </div>
+    </section>
+
+    <section class="section" id="verification">
+      <h2>Release checks are explicit.</h2>
+      <ul class="list">
+        <li><strong>Rust format and compile:</strong> <code>npm run fmt:check</code> and <code>npm run check</code>.</li>
+        <li><strong>Contract tests:</strong> <code>npm run test</code> covers Rust tests and npm package contracts.</li>
+        <li><strong>Publish surface:</strong> <code>npm run publish:dry-run</code> verifies package contents before release.</li>
+        <li><strong>Remote Pages state:</strong> this page is a local Pages entrypoint until an authorized push deploys `/docs`.</li>
+      </ul>
+    </section>
+  </main>
+  <footer>
+    <p>ai-e is a public project by lidge-jun. It is MIT licensed and designed to make multi-provider AI CLI execution auditable.</p>
+  </footer>
+</body>
+</html>
