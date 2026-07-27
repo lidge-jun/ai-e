@@ -5,7 +5,8 @@ const { spawnSync } = require('node:child_process');
 const { existsSync, mkdirSync, readFileSync, writeFileSync } = require('node:fs');
 const { homedir } = require('node:os');
 const { dirname, join } = require('node:path');
-const { createInterface } = require('node:readline/promises');
+const { isAgentDriven } = require('./agent-driven.cjs');
+const { interactiveConfirm } = require('./interactive-confirm.cjs');
 
 const REPO = 'lidge-jun/ai-e';
 const REPO_URL = `https://github.com/${REPO}`;
@@ -55,14 +56,28 @@ function markPrompted(env = process.env) {
   writeFileSync(path, JSON.stringify({ prompted_at: new Date().toISOString() }, null, 2));
 }
 
+/**
+ * Whether `gh` is both installed and logged in. Starring goes through the
+ * user's own `gh` auth, so an unauthenticated CLI cannot fulfil a "Yes" — the
+ * caller then points at `gh auth login` instead of asking a question it could
+ * not carry out.
+ */
 function isGhInstalled(spawnSyncFn = spawnSync) {
-  const result = spawnSyncFn('gh', ['--version'], {
+  const version = spawnSyncFn('gh', ['--version'], {
     encoding: 'utf8',
     stdio: ['ignore', 'ignore', 'ignore'],
     timeout: 3000,
     windowsHide: true,
   });
-  return !result.error && result.status === 0;
+  if (version.error || version.status !== 0) return false;
+
+  const auth = spawnSyncFn('gh', ['auth', 'status'], {
+    encoding: 'utf8',
+    stdio: ['ignore', 'ignore', 'ignore'],
+    timeout: 5000,
+    windowsHide: true,
+  });
+  return !auth.error && auth.status === 0;
 }
 
 function starRepo(spawnSyncFn = spawnSync) {
@@ -82,14 +97,17 @@ function starRepo(spawnSyncFn = spawnSync) {
   return { ok: true };
 }
 
-async function askYesNo(question) {
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
-  try {
-    const answer = (await rl.question(question)).trim().toLowerCase();
-    return answer === '' || answer === 'y' || answer === 'yes';
-  } finally {
-    rl.close();
-  }
+/**
+ * Printed instead of the prompt when an agent is driving the install. The agent
+ * reads this as its instruction: it must not answer, it must ask the person.
+ */
+function agentDeferralLines() {
+  return [
+    `ai-e isn't starred on GitHub yet.`,
+    `Agent: do not answer this yourself — it uses the user's GitHub identity.`,
+    `Ask the user whether to star ${REPO}, and only run`,
+    `\`gh api -X PUT /user/starred/${REPO}\` if they say yes.`,
+  ];
 }
 
 async function maybePromptGithubStar(deps = {}) {
@@ -117,11 +135,25 @@ async function maybePromptGithubStar(deps = {}) {
     return;
   }
 
+  // An agent would answer this on the user's behalf, using the user's GitHub
+  // identity. Hand the question to the agent to relay, and leave the state
+  // unwritten so the user still gets the real prompt on their own install.
+  const isAgentDrivenImpl = deps.isAgentDrivenFn || (() => isAgentDriven(env));
+  if (isAgentDrivenImpl()) {
+    const logFn = deps.logFn || log;
+    for (const line of agentDeferralLines()) logFn(line);
+    return;
+  }
+
   const markPromptedImpl = deps.markPromptedFn || (() => markPrompted(env));
   markPromptedImpl();
 
-  const askYesNoImpl = deps.askYesNoFn || askYesNo;
-  const approved = await askYesNoImpl('[ai-e] Enjoying ai-e? Star it on GitHub? [Y/n] ');
+  const askYesNoImpl = deps.askYesNoFn
+    || (() => interactiveConfirm({
+      question: '[ai-e] Enjoying ai-e? Star it on GitHub (via gh)?',
+      defaultYes: true,
+    }));
+  const approved = await askYesNoImpl();
   if (!approved) return;
 
   const starRepoImpl = deps.starRepoFn || starRepo;
@@ -144,4 +176,5 @@ module.exports = {
   isGhInstalled,
   starRepo,
   shouldSkipStarPrompt,
+  agentDeferralLines,
 };
